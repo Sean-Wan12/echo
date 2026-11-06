@@ -10,7 +10,7 @@ export function apiInput(messages, page) {
   if ((page?.text || page?.image) && latest?.role === "user") {
     const reference = [];
     if (page.image) reference.push(
-      { type: "input_text", text: "This image shows the visible area of the current Zen tab. For questions about what is shown, inspect the image first. Match a question number the user gives to the printed problem in this image. For references like ‘this question’, use the problem currently visible, even if the conversation or page text mentions another problem. Use grading feedback only if it belongs to that problem. Before solving, briefly restate the prompt and its relevant constraints. Give a solution if the prompt is readable even when the submitted work is obscured. If any part of the prompt is unclear, identify that specific part." },
+      { type: "input_text", text: "This message already includes an image of the visible area of the current Zen tab. For questions about what is shown, inspect the image first, including visible text, code, diagrams, and logos. Match a question number the user gives to the printed problem in this image. For references like ‘this question’, use the problem currently visible, even if the conversation or page text mentions another problem. Use grading feedback only if it belongs to that problem. Before solving, briefly restate the prompt and its relevant constraints. Give a solution if the prompt is readable even when the submitted work is obscured. If any part of the image is unclear, identify that specific part." },
       { type: "input_image", image_url: page.image, detail: "high" }
     );
     if (page.text) {
