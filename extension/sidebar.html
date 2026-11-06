@@ -21,7 +21,7 @@
     <label for="model">ChatGPT model</label><select id="model"></select>
     <p class="muted small">Choose a model that accepts images. Available models come from your ChatGPT account.</p>
     <div class="settings-actions"><button id="reconnect" class="secondary-button">Continue with ChatGPT</button><button id="signout" class="quiet-button">Sign out</button><button id="permissions" class="quiet-button">Screen recording settings ↗</button><a class="text-link" href="https://chatgpt.com/#settings/Usage" target="_blank" rel="noreferrer">Manage ChatGPT usage ↗</a></div>
-    <p class="muted small">Chats last until you start a new chat or quit Zen. When you send a question, Echo sends the readable page text and your message to OpenAI.</p>
+    <p class="muted small">Chats last until you start a new chat or quit Zen. When you send a question, Echo shares your message, readable page text, and an image of the visible tab with OpenAI when available.</p>
   </section>
   <main id="conversation" aria-label="Conversation">
     <section id="welcome" class="welcome">
@@ -43,7 +43,7 @@
         </button>
       </div>
     </form>
-    <div class="footer-meta"><span id="connection-label">Your space to understand.</span><span>Check important steps.</span></div>
+    <div class="footer-meta"><span id="connection-label">Your space to understand.</span><span title="Echo includes an image of the visible tab when you send a question and Zen grants access.">Includes visible tab</span></div>
   </footer>
   <dialog id="plan-dialog"><h2>You’re using your ChatGPT plan</h2><p>Eligible requests use your plan’s allowance and usage limits. You can manage Echo access and usage in ChatGPT settings.</p><button id="plan-dismiss" class="primary-button">Got it</button></dialog>
 </body></html>
