@@ -24,24 +24,34 @@ function publish() {
   }
 }
 
-async function readPage(windowId) {
+async function captureTabImage(windowId, tab) {
+  // Only ordinary pages with an activeTab grant can be included in a typed question.
+  if (!/^(https?:|file:|blob:|data:)/i.test(tab.url ?? "")) return null;
+  const scale = Math.min(1, 1600 / Math.max(tab.width || 0, tab.height || 0));
+  const image = await browser.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 82, scale });
+  return image.startsWith("data:image/jpeg;base64,") && image.length <= 2_000_000 ? image : null;
+}
+
+async function readPage(windowId, { includeImage = false } = {}) {
   const reading = { status: "reading" };
   pages.set(windowId, reading);
   publish();
   let page = { status: "unavailable" };
+  let image = null;
   try {
     const [tab] = await browser.tabs.query({ active: true, windowId });
     if (tab?.id !== undefined) {
-      const frames = await browser.tabs.executeScript(tab.id, {
-        file: "read-page.js",
-        allFrames: true,
-        runAt: "document_idle"
-      });
+      // PDF viewers and image tabs can still be visible when script injection fails.
+      const [frames, capture] = await Promise.allSettled([
+        browser.tabs.executeScript(tab.id, { file: "read-page.js", allFrames: true, runAt: "document_idle" }),
+        includeImage ? captureTabImage(windowId, tab) : null
+      ]);
       const [currentTab] = await browser.tabs.query({ active: true, windowId });
       if (currentTab?.id === tab.id && currentTab.url === tab.url) {
-        const readable = frames.filter(frame => frame?.text);
+        const readable = frames.status === "fulfilled" ? frames.value.filter(frame => frame?.text) : [];
         const text = [...new Set(readable.map(frame => frame.text))].join("\n\n");
-        if (text) page = { status: "ready", title: tab.title || readable[0].title || "Current page", text };
+        if (capture.status === "fulfilled") image = capture.value;
+        if (text || image) page = { status: "ready", title: tab.title || readable[0]?.title || "Current page", text };
       }
     }
   } catch {
@@ -50,7 +60,7 @@ async function readPage(windowId) {
   if (pages.get(windowId) !== reading) return null;
   pages.set(windowId, page);
   publish();
-  return page.status === "ready" ? page : null;
+  return page.status === "ready" ? { ...page, image } : null;
 }
 
 function connectNative() {
@@ -174,7 +184,7 @@ async function action(message) {
         if (!text) break;
         if (!account.connected) throw new Error("Connect ChatGPT first.");
         activity = "Reading the current page…";
-        lastPage = await readPage(windowId);
+        lastPage = await readPage(windowId, { includeImage: true });
         addQuestion(text);
         await generate(lastPage);
         break;
