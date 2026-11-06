@@ -20,7 +20,7 @@ test("page references attach to the latest question and retain exact theorem num
   assert.equal(input[2].content[1].text, messages[3].text);
 });
 
-test("toolbar opens before reading, send refreshes page, and capture stays optional", async () => {
+test("send captures only the current tab and keeps manual snapshots available", async () => {
   const event = () => ({
     listeners: [],
     addListener(fn) { this.listeners.push(fn); },
@@ -29,6 +29,7 @@ test("toolbar opens before reading, send refreshes page, and capture stays optio
   const onMessage = event(), onClicked = event();
   const actions = [], requests = [];
   let title = "Calculus notes", pageText = "Theorem 3.2.1. A differentiable function is continuous.";
+  let url = "https://example.com/notes", imageBlocked = false, changeTabDuringCapture = false;
   let blocked = false, cancelCapture = false;
   let sidebarOpen = false;
   const nativePort = {
@@ -67,11 +68,19 @@ test("toolbar opens before reading, send refreshes page, and capture stays optio
     },
     tabs: {
       onActivated: event(), onUpdated: event(),
-      query: async ({ windowId }) => [{ id: windowId, title }],
+      query: async ({ windowId }) => [{ id: windowId, title, url, width: 2400, height: 1600 }],
       executeScript: async () => {
         actions.push("read");
         if (blocked) throw new Error("Restricted page");
         return [{ title, text: pageText }];
+      },
+      captureVisibleTab: async (windowId, options) => {
+        assert.equal(windowId, 1);
+        assert.deepEqual(options, { format: "jpeg", quality: 82, scale: 1600 / 2400 });
+        actions.push("tab image");
+        if (imageBlocked) throw new Error("No activeTab grant");
+        if (changeTabDuringCapture) url = "https://example.com/other";
+        return image;
       }
     },
     windows: { onRemoved: event() }
@@ -86,6 +95,7 @@ test("toolbar opens before reading, send refreshes page, and capture stays optio
   pageText += "\nThe proof uses the definition of the derivative.";
   const chat = await action("send", { text: "Explain theorem 3.2.1" });
   assert.match(requests[0].input[0].content[0].text, /definition of the derivative/);
+  assert.equal(requests[0].input[0].content.at(-1).image_url, image);
   assert.equal(chat.messages.length, 2);
   await onClicked.emit({ windowId: 1 })[0];
   assert.equal(actions.at(-1), "close");
@@ -93,13 +103,23 @@ test("toolbar opens before reading, send refreshes page, and capture stays optio
   await onClicked.emit({ windowId: 1 })[0];
   assert.deepEqual(actions.slice(-2), ["open", "read"]);
   blocked = true;
+  await action("send", { text: "What animal is this?" });
+  assert.equal(requests[1].input[0].content.some(part => part.type === "input_image"), false);
+  assert.equal(requests[1].input.at(-1).content.at(-1).image_url, image);
+  assert.equal(requests[1].input.at(-1).content[1].text, "What animal is this?");
+  imageBlocked = true;
   const unavailable = await action("send", { text: "What is a derivative?" });
   assert.equal(unavailable.page.status, "unavailable");
-  assert.equal(requests[1].input.at(-1).content.length, 1);
+  assert.equal(requests[2].input.at(-1).content.length, 1);
+  imageBlocked = false;
+  changeTabDuringCapture = true;
+  const changed = await action("send", { text: "Can you see this?" });
+  assert.equal(changed.page.status, "unavailable");
+  assert.equal(requests[3].input.at(-1).content.length, 1);
   await action("capture");
-  assert.equal(requests[2].input.at(-1).content[1].image_url, image);
+  assert.equal(requests[4].input.at(-1).content[1].image_url, image);
   cancelCapture = true;
   await action("capture");
-  assert.equal(requests.length, 3);
+  assert.equal(requests.length, 5);
   assert.equal((await action("new")).messages.length, 0);
 });
