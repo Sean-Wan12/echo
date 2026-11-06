@@ -10,6 +10,19 @@ import time
 import zipfile
 
 
+STREAM_FIXTURE = """
+browser.runtime.onConnect.addListener(port => {
+  if (port.name !== "echo-smoke-fixture") return;
+  port.onMessage.addListener(fixture => {
+    messages = fixture.messages;
+    busy = fixture.busy;
+    activity = fixture.busy ? "Thinking through your question…" : "";
+    publish();
+  });
+});
+"""
+
+
 class Marionette:
     def __init__(self, connection):
         self.connection = connection
@@ -66,7 +79,10 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
         with zipfile.ZipFile(addon, "w", zipfile.ZIP_DEFLATED) as archive:
             for file in extension.rglob("*"):
                 if file.is_file():
-                    archive.write(file, file.relative_to(extension))
+                    if file == extension / "background.js":
+                        archive.writestr("background.js", file.read_text() + STREAM_FIXTURE)
+                    else:
+                        archive.write(file, file.relative_to(extension))
         with (directory / "zen.log").open("wb") as log:
             process = subprocess.Popen([options.zen, "-no-remote", "-headless", "-profile", str(profile), "--marionette", "about:blank"], env={**os.environ, "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1"}, stdout=log, stderr=log)
             try:
@@ -95,7 +111,7 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
                     time.sleep(1)
                     assert driver.script("return document.title === 'Echo' && Boolean(window.katex);"), "Sidebar assets did not load"
                     assert driver.script("return document.querySelector('h1').textContent === 'What should we work on today?';")
-                    assert driver.script("return document.querySelector('.brand-icon').naturalWidth === 360 && !document.querySelector('.brand, #page-context, #welcome p');")
+                    assert driver.script("return !document.querySelector('.brand, .brand-icon, #page-context, #welcome p');")
                     assert driver.script("return !!document.querySelector('#capture') && !document.querySelector('#history');")
                     assert driver.script("""
                         const form = document.querySelector('#composer');
@@ -118,6 +134,55 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
                         }, error => done({ error: error.message }));
                     """, args=[])["value"]
                     assert math_check == {"equations": 2, "fraction": True, "code": "let n = 1"}, math_check
+                    theme_check = driver.call("WebDriver:ExecuteAsyncScript", script="""
+                        const done = arguments[arguments.length - 1];
+                        const settings = document.querySelector('#theme');
+                        const extension = window.wrappedJSObject?.browser ?? window.browser;
+                        function select(theme) {
+                          settings.value = theme;
+                          settings.dispatchEvent(new Event('change'));
+                        }
+                        (async () => {
+                          const initial = settings.value;
+                          select('dark');
+                          const dark = getComputedStyle(document.documentElement).colorScheme;
+                          const saved = (await extension.storage.local.get('theme')).theme;
+                          select('light');
+                          const light = getComputedStyle(document.documentElement).colorScheme;
+                          select('system');
+                          done({ initial, dark, saved, light });
+                        })().catch(error => done({ error: error.message }));
+                    """, args=[])["value"]
+                    assert theme_check == {"initial": "system", "dark": "dark", "saved": "dark", "light": "light"}, theme_check
+                    stream_check = driver.call("WebDriver:ExecuteAsyncScript", script=r"""
+                        const done = arguments[arguments.length - 1];
+                        const extension = window.wrappedJSObject?.browser ?? window.browser;
+                        const port = extension.runtime.connect({ name: 'echo-smoke-fixture' });
+                        const container = document.querySelector('#messages');
+                        const prompt = { id: 'prompt', role: 'user', text: 'Factor x² − 1', status: 'complete' };
+                        const push = (text, status, ready) => new Promise(resolve => {
+                          const observer = new MutationObserver(() => {
+                            if (ready()) { observer.disconnect(); resolve(); }
+                          });
+                          observer.observe(container, { subtree: true, childList: true, characterData: true });
+                          const reply = { id: 'reply', role: 'assistant', text, status };
+                          port.postMessage({ messages: [prompt, reply], busy: status === 'streaming' });
+                        });
+                        (async () => {
+                          await push('', 'streaming', () => container.children.length === 2);
+                          const question = container.children[0];
+                          const reply = container.children[1];
+                          await push('Use a difference of squares.', 'streaming',
+                            () => container.lastElementChild.textContent.includes('difference of squares'));
+                          const sameDuringStream = container.children[0] === question && container.children[1] === reply;
+                          await push('The factors are \\(x-1\\) and \\(x+1\\).', 'complete',
+                            () => Boolean(container.querySelector('.katex')));
+                          done({ sameDuringStream, sameOnFinish: container.children[0] === question && container.children[1] === reply,
+                            animation: getComputedStyle(container.lastElementChild).animationName });
+                          port.disconnect();
+                        })().catch(error => done({ error: error.message }));
+                    """, args=[])["value"]
+                    assert stream_check == {"sameDuringStream": True, "sameOnFinish": True, "animation": "none"}, stream_check
                     driver.script("document.querySelector('#new-chat').click();")
                     if options.require_helper:
                         error = driver.script("return document.querySelector('#error-text').textContent;")
@@ -126,7 +191,7 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
                         import base64
                         shot = driver.call("WebDriver:TakeScreenshot", full=False, scroll=False)["value"]
                         options.screenshot.write_bytes(base64.b64decode(shot))
-                    print("Zen loaded the extension and opened its sidebar; the welcome screen, temporary chat, and KaTeX are available.")
+                    print("Zen opened Echo. Theme persistence, stable streaming messages, and math rendering passed.")
             finally:
                 if process.poll() is None:
                     process.terminate()
