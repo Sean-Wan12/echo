@@ -91,7 +91,7 @@ function renderMessages() {
       container.insertBefore(view.article, container.children[index] ?? null);
     }
     if (view.text === message.text && view.status === message.status) continue;
-    renderText(view.body, message.text, { math: message.status !== "streaming" });
+    renderText(view.body, message.text, { streaming: message.status === "streaming" });
     view.interrupted.hidden = message.status !== "error";
     if (view.copy) view.copy.hidden = message.status === "streaming" || !message.text.trim();
     view.text = message.text;
