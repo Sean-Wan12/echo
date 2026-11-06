@@ -4,6 +4,9 @@
 
 .welcome h1 { max-width: 320px; margin-left: auto; margin-right: auto; font-size: clamp(31px, 10vw, 44px); }
 
+.message-content { user-select: text; }
+.copy-reply { margin-top: 4px; }
+
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #1b1b20;
