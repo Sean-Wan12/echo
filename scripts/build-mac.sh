@@ -2,10 +2,11 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 build="$root/.build"
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/studylens-build.XXXXXX")"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/echo-build.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
-app="$scratch/StudyLens.app"
-mkdir -p "$build/module-cache" "$app/Contents/MacOS" "$root/dist"
+app="$scratch/Echo.app"
+resources="$app/Contents/Resources"
+mkdir -p "$build/module-cache" "$app/Contents/MacOS" "$resources" "$root/dist"
 set --
 swift_include="$(dirname "$(xcrun --find swiftc)")/../include/swift"
 # Some CLT installations contain two identical SwiftBridging module maps.
@@ -20,11 +21,13 @@ JXA
   set -- -vfsoverlay "$build/swift-overlay.json" -Xcc -ivfsoverlay -Xcc "$build/swift-overlay.json"
 fi
 swiftc -swift-version 5 -O -whole-module-optimization -parse-as-library -module-cache-path "$build/module-cache" "$@" \
-  -target "$(uname -m)-apple-macos13.0" "$root"/native/*.swift -o "$app/Contents/MacOS/StudyLens"
+  -target "$(uname -m)-apple-macos13.0" "$root"/native/*.swift -o "$app/Contents/MacOS/Echo"
 cp "$root/native/Info.plist" "$app/Contents/Info.plist"
+cp "$root/extension/icons/apple-cutout.png" "$resources/EchoMenu.png"
+/usr/bin/sips -s format icns "$resources/EchoMenu.png" --out "$resources/Echo.icns" >/dev/null
 /usr/bin/xattr -cr "$app"
 /usr/bin/codesign --force --sign - "$app"
 /usr/bin/codesign --verify --strict "$app"
-/usr/bin/ditto -c -k --keepParent --norsrc --noextattr "$app" "$scratch/StudyLens-mac.zip"
-mv -f "$scratch/StudyLens-mac.zip" "$root/dist/StudyLens-mac.zip"
-printf 'Built %s\n' "$root/dist/StudyLens-mac.zip"
+/usr/bin/ditto -c -k --keepParent --norsrc --noextattr "$app" "$scratch/Echo-mac.zip"
+mv -f "$scratch/Echo-mac.zip" "$root/dist/Echo-mac.zip"
+printf 'Built %s\n' "$root/dist/Echo-mac.zip"
