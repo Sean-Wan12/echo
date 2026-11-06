@@ -5,6 +5,15 @@ let state;
 const messageViews = new Map();
 const preferences = await browser.storage.local.get(["theme", "planNoticeSeen"]);
 let planNoticeShown = Boolean(preferences.planNoticeSeen);
+const tabAccess = { origins: ["<all_urls>"] };
+let automaticTabAccess = false;
+
+async function updateTabAccess() {
+  automaticTabAccess = await browser.permissions.contains(tabAccess);
+  $("tab-access").textContent = automaticTabAccess ? "Turn off automatic access" : "Enable tab access";
+  $("tab-access-status").textContent = automaticTabAccess ? "On for the active tab when you send." : "Open Echo from a tab to grant access just to that tab.";
+  $("tab-access-label").textContent = automaticTabAccess ? "Automatic tab access on" : "Visible tab on send";
+}
 
 function setTheme(theme) {
   const appearance = theme === "light" || theme === "dark" ? theme : "system";
@@ -31,7 +40,7 @@ function createMessageView(message) {
   if (message.tabImage === true) label.textContent += " · Tab image included";
   if (message.tabImage === false) {
     label.textContent += " · No tab image";
-    label.title = "Open Echo from this tab to grant access, or use Snapshot to select the image.";
+    label.title = "Enable tab access in Echo settings, reopen Echo from this tab, or use Snapshot.";
   }
   const content = document.createElement("div");
   content.className = "message-content";
@@ -107,15 +116,18 @@ function renderMessages() {
 }
 function update(next) {
   state = next;
+  const needsReload = !state.tabCaptureReady;
   $("welcome").hidden = state.messages.length > 0;
   $("connect-card").hidden = state.account.connected;
   $("composer").hidden = !state.account.connected;
   $("status").hidden = !state.busy;
   $("status-text").textContent = state.activity || "One moment…";
-  $("error").hidden = !state.error;
-  $("error-text").textContent = state.error;
-  $("retry").hidden = !state.messages.some(m => m.role === "user") || state.messages.at(-1)?.status === "complete" && state.messages.at(-1)?.role === "assistant";
+  $("error").hidden = !needsReload && !state.error;
+  $("error-text").textContent = needsReload ? "Reload Echo from Zen’s debugging page to finish the update." : state.error;
+  $("error-close").hidden = needsReload;
+  $("retry").hidden = needsReload || !state.messages.some(m => m.role === "user") || state.messages.at(-1)?.status === "complete" && state.messages.at(-1)?.role === "assistant";
   for (const id of ["signin", "capture", "send", "new-chat", "reconnect", "signout", "model", "permissions", "retry", "question"]) $(id).disabled = state.busy;
+  for (const id of ["capture", "send", "question"]) $(id).disabled ||= needsReload;
   $("account-detail").textContent = state.account.connected ? `Connected${state.account.email ? " as " + state.account.email : " to ChatGPT"}.` : "Connect ChatGPT to start studying.";
   $("connection-label").textContent = state.account.connected ? "● Using ChatGPT plan" : "Your space to understand.";
   $("signout").hidden = !state.account.connected;
@@ -136,6 +148,18 @@ $("capture").onclick = () => send("capture");
 $("new-chat").onclick = () => send("new");
 $("settings-toggle").onclick = () => { $("settings").hidden = !$("settings").hidden; };
 $("settings-close").onclick = () => { $("settings").hidden = true; };
+$("tab-access").onclick = async () => {
+  try {
+    if (automaticTabAccess) await browser.permissions.remove(tabAccess);
+    else await browser.permissions.request(tabAccess);
+    await updateTabAccess();
+  } catch {
+    $("tab-access-status").textContent = "Zen couldn’t change tab access. Reload Echo and try again.";
+  }
+};
+browser.permissions.onAdded.addListener(updateTabAccess);
+browser.permissions.onRemoved.addListener(updateTabAccess);
+void updateTabAccess();
 $("theme").onchange = async event => {
   const theme = event.target.value;
   setTheme(theme);
@@ -150,7 +174,7 @@ $("plan-dismiss").onclick = () => {
   browser.storage.local.set({ planNoticeSeen: true });
   $("plan-dialog").close();
 };
-$("composer").onsubmit = event => { event.preventDefault(); const text = $("question").value.trim(); if (!text || !state || state.busy) return; $("question").value = ""; $("question").style.height = "auto"; send("send", { text }); };
+$("composer").onsubmit = event => { event.preventDefault(); const text = $("question").value.trim(); if (!text || !state?.tabCaptureReady || state.busy) return; $("question").value = ""; $("question").style.height = "auto"; send("send", { text }); };
 $("question").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); $("composer").requestSubmit(); } };
 $("question").oninput = () => { $("question").style.height = "auto"; $("question").style.height = Math.min($("question").scrollHeight, 130) + "px"; };
 const port = browser.runtime.connect({ name: `sidebar:${windowId}` }); port.onMessage.addListener(update);
