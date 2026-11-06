@@ -49,7 +49,26 @@ function createMessageView(message) {
   interrupted.hidden = true;
   content.append(body, interrupted);
   article.append(label, content);
-  return { article, body, interrupted };
+  const view = { article, body, interrupted };
+  if (message.role === "assistant") {
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "quiet-button copy-reply";
+    copy.textContent = "Copy reply";
+    copy.hidden = true;
+    copy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(view.text);
+        copy.textContent = "Copied";
+      } catch {
+        copy.textContent = "Copy failed";
+      }
+    };
+    copy.onblur = () => { copy.textContent = "Copy reply"; };
+    article.append(copy);
+    view.copy = copy;
+  }
+  return view;
 }
 
 function renderMessages() {
@@ -74,6 +93,7 @@ function renderMessages() {
     if (view.text === message.text && view.status === message.status) continue;
     renderText(view.body, message.text, { math: message.status !== "streaming" });
     view.interrupted.hidden = message.status !== "error";
+    if (view.copy) view.copy.hidden = message.status === "streaming" || !message.text.trim();
     view.text = message.text;
     view.status = message.status;
     updated = true;
