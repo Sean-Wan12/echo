@@ -28,6 +28,11 @@ function createMessageView(message) {
   const label = document.createElement("div");
   label.className = "message-label";
   label.textContent = message.role === "assistant" ? "Echo" : message.image ? "Your snapshot" : "You";
+  if (message.tabImage === true) label.textContent += " · Tab image included";
+  if (message.tabImage === false) {
+    label.textContent += " · No tab image";
+    label.title = "Open Echo from this tab to grant access, or use Snapshot to select the image.";
+  }
   const content = document.createElement("div");
   content.className = "message-content";
   if (message.image) {
