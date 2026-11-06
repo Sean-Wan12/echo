@@ -27,7 +27,9 @@ def call(process, method, **params):
 
 
 def main():
-    host = Path.home() / "Applications/StudyLens.app/Contents/MacOS/StudyLens"
+    manifest_path = Path.home() / "Library/Application Support/Mozilla/NativeMessagingHosts/com.studylens.helper.json"
+    host = Path(json.loads(manifest_path.read_text())["path"])
+    assert host == Path.home() / "Applications/Echo.app/Contents/MacOS/Echo", host
     with subprocess.Popen([str(host), "--native-host"], stdin=subprocess.PIPE, stdout=subprocess.PIPE) as process:
         try:
             result, _ = call(process, "status")
