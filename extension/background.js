@@ -11,7 +11,7 @@ const ready = browser.storage.local.get("model").then(saved => { model = saved.m
 function snapshot(windowId) {
   const page = pages.get(windowId);
   const pageInfo = page ? { status: page.status, title: page.title } : { status: "waiting" };
-  return { messages, page: pageInfo, busy, activity, error, account, models, model };
+  return { messages, page: pageInfo, busy, activity, error, account, models, model, tabCaptureReady: true };
 }
 
 function publish() {
@@ -26,7 +26,7 @@ function publish() {
 }
 
 async function captureTabImage(windowId, tab) {
-  // Only ordinary pages with an activeTab grant can be included in a typed question.
+  // Leave browser settings and other extension pages out even with automatic access.
   if (!/^(https?:|file:|blob:|data:)/i.test(tab.url ?? "")) return null;
   // Keep small print in scans legible on high-density displays.
   const scale = Math.min(2, 2400 / Math.max(tab.width || 0, tab.height || 0));
@@ -34,10 +34,9 @@ async function captureTabImage(windowId, tab) {
   return image.startsWith("data:image/jpeg;base64,") && image.length <= 5_000_000 ? image : null;
 }
 
-async function readPage(windowId, { includeImage = false } = {}) {
+async function readPage(windowId) {
   const navigation = navigations.get(windowId);
-  const reading = { status: "reading" };
-  pages.set(windowId, reading);
+  pages.set(windowId, { status: "reading" });
   publish();
   let page = { status: "unavailable" };
   let image = null;
@@ -47,7 +46,7 @@ async function readPage(windowId, { includeImage = false } = {}) {
       // PDF viewers and image tabs can still be visible when script injection fails.
       const [frames, capture] = await Promise.allSettled([
         browser.tabs.executeScript(tab.id, { file: "read-page.js", allFrames: true, runAt: "document_idle" }),
-        includeImage ? captureTabImage(windowId, tab) : null
+        captureTabImage(windowId, tab)
       ]);
       const [currentTab] = await browser.tabs.query({ active: true, windowId });
       if (currentTab?.id === tab.id && currentTab.url === tab.url) {
@@ -61,10 +60,8 @@ async function readPage(windowId, { includeImage = false } = {}) {
     // Zen restricts access to browser pages, its PDF viewer, and tabs without an active grant.
   }
   if (navigations.get(windowId) !== navigation) return null;
-  if (pages.get(windowId) === reading) {
-    pages.set(windowId, page);
-    publish();
-  }
+  pages.set(windowId, page);
+  publish();
   return page.status === "ready" ? { ...page, image } : null;
 }
 
@@ -189,7 +186,7 @@ async function action(message) {
         if (!text) break;
         if (!account.connected) throw new Error("Connect ChatGPT first.");
         activity = "Reading the current page…";
-        lastPage = await readPage(windowId, { includeImage: true });
+        lastPage = await readPage(windowId);
         addQuestion(text, { tabImage: Boolean(lastPage?.image) });
         await generate(lastPage);
         break;
@@ -238,32 +235,20 @@ browser.runtime.onConnect.addListener(port => {
 });
 browser.runtime.onMessage.addListener(action);
 
-browser.browserAction.onClicked.addListener(tab => {
+browser.browserAction.onClicked.addListener(() => {
   // The sidebar toggle must run inside the toolbar click or shortcut handler.
-  return browser.sidebarAction.toggle()
-    .then(async () => {
-      if (await browser.sidebarAction.isOpen({ windowId: tab.windowId })) {
-        await readPage(tab.windowId);
-      }
-    })
-    .catch(e => { error = e.message; publish(); });
+  return browser.sidebarAction.toggle().catch(e => { error = e.message; publish(); });
 });
 
-browser.tabs.onActivated.addListener(({ windowId }) => {
+function invalidatePage(windowId) {
   navigations.set(windowId, Symbol());
-  if ([...subscribers.values()].includes(windowId)) void readPage(windowId);
-});
+  pages.delete(windowId);
+  publish();
+}
 
+browser.tabs.onActivated.addListener(({ windowId }) => invalidatePage(windowId));
 browser.tabs.onUpdated.addListener((tabId, changes, tab) => {
-  if (!tab.active) return;
-  if (changes.status === "loading" || changes.url !== undefined) navigations.set(tab.windowId, Symbol());
-  if (![...subscribers.values()].includes(tab.windowId)) return;
-  if (changes.status === "loading") {
-    pages.set(tab.windowId, { status: "waiting" });
-    publish();
-  } else if (changes.status === "complete") {
-    void readPage(tab.windowId);
-  }
+  if (tab.active && (changes.status === "loading" || changes.url !== undefined)) invalidatePage(tab.windowId);
 });
 
 browser.windows.onRemoved.addListener(windowId => {
