@@ -1,6 +1,6 @@
 # Echo
 
-Echo opens a temporary chat beside the page you’re studying in Zen on macOS. Click its toolbar button or press **⌘⇧U** to open or close the sidebar. Echo reads the tab’s accessible text, including text below the fold, and includes it when you send a question. For unusually long pages, it picks passages related to what you asked. Math answers use LaTeX for equations and fractions.
+Echo opens a temporary chat beside the page you’re studying in Zen on macOS. Click its toolbar button or press **⌘⇧U** to open or close the sidebar. When you send a question, Echo includes accessible page text and an image of the visible tab when Zen allows access. For unusually long pages, it picks text passages related to what you asked. Echo typesets each equation as soon as the reply contains the complete formula.
 
 **Snapshot** is available in the sidebar for diagrams, image-only content, and Zen’s built-in PDF viewer. Selecting a region sends the image for an explanation. **New chat** clears the current conversation. Conversations are held in memory and disappear when you quit Zen.
 
@@ -14,11 +14,11 @@ Echo opens a temporary chat beside the page you’re studying in Zen on macOS. C
 
 If Zen reports that the Mac helper is unavailable, double-click **Echo Setup.command** in Finder to install and register `~/Applications/Echo.app`. This also replaces a previous `StudyLens.app` install. If Echo is already loaded from this folder, click **Reload** on Zen’s debugging page after updating. Zen unloads temporary add-ons when it quits. Repeat steps 1 and 2 after a restart.
 
-The sidebar uses Zen’s sidebar position setting. If Echo misses page context after you switch tabs, open it from that tab with **⌘⇧U** to grant access. Use Snapshot for built-in PDFs, browser pages that block access, or material that is only shown as an image.
+The sidebar uses Zen’s sidebar position setting. If Echo misses page context after you switch tabs, open it from that tab with **⌘⇧U** to grant access. Scroll an image or diagram into view before sending. Use **Snapshot** to select a smaller region or if Zen blocks access to the tab.
 
 ## How it works
 
-The Zen extension reads the selected tab only after a toolbar click or shortcut grants access. It refreshes the page text when you send a message. Page text and snapshots go to OpenAI with the question you submit. Zen starts the Mac helper when Echo needs it. The helper waits for requests when idle and exits when Zen closes its connection. It handles sign-in, model requests, and optional screen capture, and stores your sign-in credentials in the Mac Keychain. The extension holds the chat in memory.
+The Zen extension reads the selected tab after a toolbar click or shortcut grants access. On send, it refreshes the page text and captures the part of the tab you can see. This tab image excludes other windows and the desktop. Page context and manual snapshots go to OpenAI with the question you submit. Zen starts the Mac helper when Echo needs it. The helper waits for requests when idle and exits when Zen closes its connection. It handles sign-in, model requests, and optional screen capture, and stores your sign-in credentials in the Mac Keychain. The extension holds the chat in memory.
 
 ## Development
 
