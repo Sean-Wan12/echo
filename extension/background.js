@@ -4,6 +4,7 @@ let messages = [];
 let busy = false, activity = "", error = "", lastPage = null;
 let account = { connected: false }, models = [], model = "", nativePort = null;
 const pending = new Map(), subscribers = new Map(), pages = new Map();
+const navigations = new Map();
 let streamUpdate = null;
 const ready = browser.storage.local.get("model").then(saved => { model = saved.model || ""; });
 
@@ -27,12 +28,14 @@ function publish() {
 async function captureTabImage(windowId, tab) {
   // Only ordinary pages with an activeTab grant can be included in a typed question.
   if (!/^(https?:|file:|blob:|data:)/i.test(tab.url ?? "")) return null;
-  const scale = Math.min(1, 1600 / Math.max(tab.width || 0, tab.height || 0));
-  const image = await browser.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 82, scale });
-  return image.startsWith("data:image/jpeg;base64,") && image.length <= 2_000_000 ? image : null;
+  // Keep small print in scans legible on high-density displays.
+  const scale = Math.min(2, 2400 / Math.max(tab.width || 0, tab.height || 0));
+  const image = await browser.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 90, scale });
+  return image.startsWith("data:image/jpeg;base64,") && image.length <= 5_000_000 ? image : null;
 }
 
 async function readPage(windowId, { includeImage = false } = {}) {
+  const navigation = navigations.get(windowId);
   const reading = { status: "reading" };
   pages.set(windowId, reading);
   publish();
@@ -57,9 +60,11 @@ async function readPage(windowId, { includeImage = false } = {}) {
   } catch {
     // Zen restricts access to browser pages, its PDF viewer, and tabs without an active grant.
   }
-  if (pages.get(windowId) !== reading) return null;
-  pages.set(windowId, page);
-  publish();
+  if (navigations.get(windowId) !== navigation) return null;
+  if (pages.get(windowId) === reading) {
+    pages.set(windowId, page);
+    publish();
+  }
   return page.status === "ready" ? { ...page, image } : null;
 }
 
@@ -132,8 +137,8 @@ async function generate(page) {
   }
 }
 
-function addQuestion(text, image) {
-  messages.push({ id: crypto.randomUUID(), role: "user", text, image, status: "complete" });
+function addQuestion(text, { image, tabImage } = {}) {
+  messages.push({ id: crypto.randomUUID(), role: "user", text, image, tabImage, status: "complete" });
 }
 
 async function capture() {
@@ -143,7 +148,7 @@ async function capture() {
   const result = await native("capture");
   if (result.cancelled) return;
   lastPage = null;
-  addQuestion("", result.image);
+  addQuestion("", { image: result.image });
   await generate(null);
 }
 
@@ -185,7 +190,7 @@ async function action(message) {
         if (!account.connected) throw new Error("Connect ChatGPT first.");
         activity = "Reading the current page…";
         lastPage = await readPage(windowId, { includeImage: true });
-        addQuestion(text);
+        addQuestion(text, { tabImage: Boolean(lastPage?.image) });
         await generate(lastPage);
         break;
       }
@@ -245,11 +250,14 @@ browser.browserAction.onClicked.addListener(tab => {
 });
 
 browser.tabs.onActivated.addListener(({ windowId }) => {
+  navigations.set(windowId, Symbol());
   if ([...subscribers.values()].includes(windowId)) void readPage(windowId);
 });
 
 browser.tabs.onUpdated.addListener((tabId, changes, tab) => {
-  if (!tab.active || ![...subscribers.values()].includes(tab.windowId)) return;
+  if (!tab.active) return;
+  if (changes.status === "loading" || changes.url !== undefined) navigations.set(tab.windowId, Symbol());
+  if (![...subscribers.values()].includes(tab.windowId)) return;
   if (changes.status === "loading") {
     pages.set(tab.windowId, { status: "waiting" });
     publish();
@@ -258,4 +266,7 @@ browser.tabs.onUpdated.addListener((tabId, changes, tab) => {
   }
 });
 
-browser.windows.onRemoved.addListener(windowId => pages.delete(windowId));
+browser.windows.onRemoved.addListener(windowId => {
+  pages.delete(windowId);
+  navigations.delete(windowId);
+});
