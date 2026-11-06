@@ -11,7 +11,15 @@ final class Helper: NSObject {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Echo")
+        if let url = Bundle.main.url(forResource: "EchoMenu", withExtension: "png"),
+           let icon = NSImage(contentsOf: url) {
+            icon.size = NSSize(width: 18, height: 18)
+            icon.isTemplate = false
+            icon.accessibilityDescription = "Echo"
+            item.button?.image = icon
+        } else {
+            item.button?.image = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Echo")
+        }
         item.button?.toolTip = "Echo · Mac capture helper"
         let menu = NSMenu()
         let label = NSMenuItem(title: "Echo", action: nil, keyEquivalent: ""); menu.addItem(label)
@@ -75,7 +83,7 @@ final class Helper: NSObject {
 }
 
 @main
-enum StudyLens {
+enum Echo {
     @MainActor static func main() {
         umask(0o077)
         let helper = Helper()
