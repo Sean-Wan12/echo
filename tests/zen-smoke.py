@@ -164,7 +164,7 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
                           const observer = new MutationObserver(() => {
                             if (ready()) { observer.disconnect(); resolve(); }
                           });
-                          observer.observe(container, { subtree: true, childList: true, characterData: true });
+                          observer.observe(container, { subtree: true, childList: true, characterData: true, attributes: true });
                           const reply = { id: 'reply', role: 'assistant', text, status };
                           port.postMessage({ messages: [prompt, reply], busy: status === 'streaming' });
                         });
@@ -172,17 +172,29 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
                           await push('', 'streaming', () => container.children.length === 2);
                           const question = container.children[0];
                           const reply = container.children[1];
-                          await push('Use a difference of squares.', 'streaming',
+                          const partial = String.raw`Use a difference of squares. \(x^`;
+                          const inline = String.raw`Use a difference of squares. \(x^2\)`;
+                          const unfinished = inline + '\n\n' + String.raw`\[\frac{x`;
+                          const complete = inline + '\n\n' + String.raw`\[\frac{x}{2}\]`;
+                          await push(partial, 'streaming',
                             () => container.lastElementChild.textContent.includes('difference of squares'));
+                          const hidesUnfinishedInline = !reply.textContent.includes(String.raw`\(x^`);
+                          await push(unfinished, 'streaming', () => Boolean(reply.querySelector('.katex')));
+                          const renderedInline = reply.querySelector('.katex');
+                          const hidesUnfinishedDisplay = !reply.textContent.includes(String.raw`\frac{x`);
+                          await push(complete, 'streaming', () => Boolean(reply.querySelector('.katex-display .mfrac')));
+                          const preservesInline = reply.querySelector('.katex') === renderedInline;
                           const sameDuringStream = container.children[0] === question && container.children[1] === reply;
-                          await push('The factors are \\(x-1\\) and \\(x+1\\).', 'complete',
-                            () => Boolean(container.querySelector('.katex')));
-                          done({ sameDuringStream, sameOnFinish: container.children[0] === question && container.children[1] === reply,
+                          await push(complete, 'complete', () => !reply.querySelector('.copy-reply').hidden);
+                          done({ hidesUnfinishedInline, hidesUnfinishedDisplay, preservesInline,
+                            sameDuringStream, sameOnFinish: container.children[0] === question && container.children[1] === reply,
                             animation: getComputedStyle(container.lastElementChild).animationName });
                           port.disconnect();
                         })().catch(error => done({ error: error.message }));
                     """, args=[])["value"]
-                    assert stream_check == {"sameDuringStream": True, "sameOnFinish": True, "animation": "none"}, stream_check
+                    assert stream_check == {"hidesUnfinishedInline": True, "hidesUnfinishedDisplay": True,
+                                            "preservesInline": True, "sameDuringStream": True,
+                                            "sameOnFinish": True, "animation": "none"}, stream_check
                     driver.script("document.querySelector('#new-chat').click();")
                     if options.require_helper:
                         error = driver.script("return document.querySelector('#error-text').textContent;")
