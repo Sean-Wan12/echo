@@ -1,0 +1,32 @@
+# Echo
+
+Echo opens a temporary chat beside the page you’re studying in Zen on macOS. Click its toolbar button or press **⌘⇧U** to open or close the sidebar. Echo reads the tab’s accessible text, including text below the fold, and includes it when you send a question. For unusually long pages, it picks passages related to what you asked. Math answers use LaTeX for equations and fractions.
+
+**Snapshot** is available in the sidebar for diagrams, image-only content, and Zen’s built-in PDF viewer. Selecting a region sends the image for an explanation. **New chat** clears the current conversation. Conversations are held in memory and disappear when you quit Zen.
+
+## Open Echo
+
+1. Open **Zen**. Press **⌘L**, paste `about:debugging#/runtime/this-firefox` into the address bar, and press **Return**.
+2. Click **Load Temporary Add-on…**. In the file chooser, press **⌘⇧G**, paste the absolute path to this folder’s `extension/manifest.json`, and press **Return**. Select **Open**.
+3. Go to a study webpage, then press **⌘⇧U** or choose **Echo** from Zen’s extensions menu.
+4. Choose **Continue with ChatGPT** to use your [ChatGPT plan](https://developers.openai.com/siwc/quickstart). Sign in with your Plus account and authorize Echo.
+5. Ask a question in the sidebar. If you use **Snapshot**, macOS may prompt for screen recording access for Echo or Zen.
+
+If Zen reports that the Mac helper is unavailable, double-click **Echo Setup.command** in Finder to install and register it. Zen unloads temporary add-ons when it quits. Repeat steps 1 and 2 after a restart.
+
+The sidebar uses Zen’s sidebar position setting. If Echo misses page context after you switch tabs, open it from that tab with **⌘⇧U** to grant access. Use Snapshot for built-in PDFs, browser pages that block access, or material that is only shown as an image.
+
+## How it works
+
+The Zen extension reads the selected tab only after a toolbar click or shortcut grants access. It refreshes the page text when you send a message. Page text and snapshots go to OpenAI with the question you submit. The Swift helper handles sign-in, model requests, and optional screen capture. It stores your sign-in credentials in the Mac Keychain. The extension holds the chat in memory.
+
+## Development
+
+```sh
+bash scripts/build-mac.sh
+node --test tests/*.test.mjs
+python3 tests/host-smoke.py
+python3 tests/zen-smoke.py --require-helper
+```
+
+The Zen smoke test uses a separate temporary profile. Account authorization and screen recording permission are checked when you first use them.
