@@ -1,28 +1,44 @@
 #!/bin/bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
-archive="$root/dist/StudyLens-mac.zip"
-if [[ ! -f "$archive" ]]; then
-  /bin/bash "$root/scripts/build-mac.sh"
-fi
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/studylens-setup.XXXXXX")"
-trap 'rm -rf "$scratch"' EXIT
-/usr/bin/ditto -x -k "$archive" "$scratch"
-/usr/bin/codesign --verify --strict "$scratch/StudyLens.app"
-app="$HOME/Applications/StudyLens.app"
-mkdir -p "$HOME/Applications"
-if [[ -e "$app" ]]; then
-  existing=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist" 2>/dev/null || true)
-  if [[ "$existing" != com.studylens.helper ]]; then
-    printf 'Another app is already at %s. Move it first and run setup again.\n' "$app" >&2
-    exit 1
+archive="$root/dist/Echo-mac.zip"
+for source in "$root/scripts/build-mac.sh" "$root/extension/icons/apple-cutout.png" "$root"/native/*; do
+  if [[ ! -f "$archive" || "$source" -nt "$archive" ]]; then
+    /bin/bash "$root/scripts/build-mac.sh"
+    break
   fi
+done
+
+apps="$HOME/Applications"
+app="$apps/Echo.app"
+legacy="$apps/StudyLens.app"
+is_echo() {
+  [[ ! -L "$1" && $(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$1/Contents/Info.plist" 2>/dev/null) == com.studylens.helper ]]
+}
+if [[ -e "$app" || -L "$app" ]] && ! is_echo "$app"; then
+  printf 'Another app is already at %s. Move it first and run setup again.\n' "$app" >&2
+  exit 1
 fi
-/usr/bin/ditto --norsrc --noextattr "$scratch/StudyLens.app" "$app"
-/usr/bin/codesign --verify --strict "$app"
+mkdir -p "$apps"
+scratch="$(mktemp -d "$apps/.echo-setup.XXXXXX")"
+installed=0
+registered=0
+cleanup() {
+  if (( ! registered )); then
+    if (( installed )); then mv "$app" "$scratch/failed-Echo.app" || return; fi
+    if [[ -d "$scratch/previous-Echo.app" ]]; then mv "$scratch/previous-Echo.app" "$app" || return; fi
+  fi
+  rm -rf "$scratch"
+}
+trap cleanup EXIT
+/usr/bin/ditto -x -k "$archive" "$scratch"
+/usr/bin/codesign --verify --strict "$scratch/Echo.app"
+if [[ -e "$app" ]]; then mv "$app" "$scratch/previous-Echo.app"; fi
+mv "$scratch/Echo.app" "$app"
+installed=1
 hosts="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts"
 mkdir -p "$hosts"
-/usr/bin/osascript -l JavaScript - "$hosts/com.studylens.helper.json" "$app/Contents/MacOS/StudyLens" <<'JXA'
+/usr/bin/osascript -l JavaScript - "$hosts/com.studylens.helper.json" "$app/Contents/MacOS/Echo" <<'JXA'
 ObjC.import('Foundation');
 function run(args) {
   const manifest = {name: 'com.studylens.helper', description: 'Echo Mac capture and ChatGPT helper',
@@ -32,4 +48,6 @@ function run(args) {
   }
 }
 JXA
-printf '\nEcho helper registered. In Zen, open about:debugging#/runtime/this-firefox,\nchoose Load Temporary Add-on, and select:\n\n%s\n\nPin Echo, open its sidebar, and choose Continue with ChatGPT.\n' "$root/extension/manifest.json"
+registered=1
+if is_echo "$legacy"; then mv "$legacy" "$scratch/previous-StudyLens.app"; fi
+printf '\nEcho installed at %s. In Zen, open about:debugging#/runtime/this-firefox.\nIf Echo is loaded from this folder, click Reload. Otherwise, choose Load Temporary Add-on and select:\n\n%s\n\nOpen Echo with Command+Shift+U.\n' "$app" "$root/extension/manifest.json"
