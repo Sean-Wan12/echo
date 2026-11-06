@@ -22,6 +22,10 @@
       <option value="light">Light</option>
       <option value="dark">Dark</option>
     </select>
+    <label for="tab-access">Automatic tab access</label>
+    <p class="muted small">Let Echo read the active tab when you send a question, even after you switch tabs. Zen asks for website access once.</p>
+    <button id="tab-access" class="secondary-button">Enable tab access</button>
+    <p id="tab-access-status" class="muted small" role="status"></p>
     <p id="account-detail" class="small"></p>
     <label for="model">ChatGPT model</label><select id="model"></select>
     <p class="muted small">Choose a model that accepts images. Available models come from your ChatGPT account.</p>
@@ -48,7 +52,7 @@
         </button>
       </div>
     </form>
-    <div class="footer-meta"><span id="connection-label">Your space to understand.</span><span title="Echo includes an image of the visible tab when you send a question and Zen grants access.">Includes visible tab</span></div>
+    <div class="footer-meta"><span id="connection-label">Your space to understand.</span><span id="tab-access-label">Visible tab on send</span></div>
   </footer>
   <dialog id="plan-dialog"><h2>You’re using your ChatGPT plan</h2><p>Eligible requests use your plan’s allowance and usage limits. You can manage Echo access and usage in ChatGPT settings.</p><button id="plan-dismiss" class="primary-button">Got it</button></dialog>
 </body></html>
