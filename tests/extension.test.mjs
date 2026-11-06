@@ -26,7 +26,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
     addListener(fn) { this.listeners.push(fn); },
     emit(...args) { return this.listeners.map(fn => fn(...args)); }
   });
-  const onMessage = event(), onClicked = event(), onConnect = event(), onUpdated = event();
+  const onMessage = event(), onClicked = event(), onConnect = event(), onActivated = event(), onUpdated = event();
   const actions = [], requests = [];
   let title = "Calculus notes", pageText = "Theorem 3.2.1. A differentiable function is continuous.";
   let url = "https://example.com/notes", imageBlocked = false, changeTabDuringCapture = false;
@@ -63,12 +63,9 @@ test("send captures only the current tab and keeps manual snapshots available", 
     runtime: { onMessage, onConnect, connectNative: () => nativePort },
     storage: { local: { get: async () => ({}), set: async () => {} } },
     browserAction: { onClicked },
-    sidebarAction: {
-      toggle: async () => { sidebarOpen = !sidebarOpen; actions.push(sidebarOpen ? "open" : "close"); },
-      isOpen: async () => sidebarOpen
-    },
+    sidebarAction: { toggle: async () => { sidebarOpen = !sidebarOpen; actions.push(sidebarOpen ? "open" : "close"); } },
     tabs: {
-      onActivated: event(), onUpdated,
+      onActivated, onUpdated,
       query: async ({ windowId }) => [{ id: windowId, title, url, width: 900, height: 830 }],
       executeScript: async () => {
         actions.push("read");
@@ -91,9 +88,10 @@ test("send captures only the current tab and keeps manual snapshots available", 
   onConnect.emit({ name: "sidebar:1", onDisconnect: event(), postMessage() {} });
   const action = (type, extra = {}) => onMessage.emit({ type, windowId: 1, ...extra })[0];
   await onClicked.emit({ windowId: 1 })[0];
-  assert.deepEqual(actions, ["open", "read"]);
+  assert.deepEqual(actions, ["open"]);
   assert.equal(requests.length, 0);
-  assert.deepEqual((await action("state")).page, { status: "ready", title });
+  assert.deepEqual((await action("state")).page, { status: "waiting" });
+  assert.equal((await action("state")).tabCaptureReady, true);
   await action("status");
   pageText += "\nThe proof uses the definition of the derivative.";
   refreshDuringCapture = true;
@@ -108,7 +106,12 @@ test("send captures only the current tab and keeps manual snapshots available", 
   assert.equal(actions.at(-1), "close");
   assert.equal((await action("state")).messages.length, 2);
   await onClicked.emit({ windowId: 1 })[0];
-  assert.deepEqual(actions.slice(-2), ["open", "read"]);
+  assert.deepEqual(actions.slice(-2), ["close", "open"]);
+  const beforeSwitch = [...actions];
+  url = "https://example.com/quiz";
+  onActivated.emit({ windowId: 1 });
+  onUpdated.emit(1, { status: "complete" }, { active: true, windowId: 1 });
+  assert.deepEqual(actions, beforeSwitch);
   pageText = "Q9 Feedback: Use symbol=? to compare two symbols.";
   await action("send", { text: "What is the correct solution to the visible Q10?" });
   const scanQuestion = requests.at(-1).input.at(-1).content;
