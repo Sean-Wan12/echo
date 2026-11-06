@@ -4,13 +4,25 @@
 <script defer src="vendor/katex/katex.min.js"></script><script defer src="vendor/katex/auto-render.min.js"></script><script type="module" src="sidebar.js"></script></head>
 <body>
   <header class="topbar">
-    <img class="brand-icon" src="icons/apple.png" alt="" width="24" height="24">
     <div class="toolbar">
       <button id="new-chat" class="quiet-button"><span aria-hidden="true">＋</span> New chat</button>
       <button id="settings-toggle" class="icon-button" title="Settings" aria-label="Settings">⚙</button>
     </div>
   </header>
-  <section id="settings" class="drawer" hidden aria-label="Settings"><div class="drawer-heading"><h2>Make yourself at home</h2><button id="settings-close" class="icon-button" aria-label="Close settings">×</button></div><p id="account-detail" class="small"></p><label for="model">ChatGPT model</label><select id="model"></select><p class="muted small">Choose a model that accepts images. Available models come from your ChatGPT account.</p><div class="settings-actions"><button id="reconnect" class="secondary-button">Continue with ChatGPT</button><button id="signout" class="quiet-button">Sign out</button><button id="permissions" class="quiet-button">Screen recording settings ↗</button><a class="text-link" href="https://chatgpt.com/#settings/Usage" target="_blank" rel="noreferrer">Manage ChatGPT usage ↗</a></div><p class="muted small">Chats last until you start a new chat or quit Zen. When you send a question, Echo sends the readable page text and your message to OpenAI.</p></section>
+  <section id="settings" class="drawer" hidden aria-label="Settings">
+    <div class="drawer-heading"><h2>Settings</h2><button id="settings-close" class="icon-button" aria-label="Close settings">×</button></div>
+    <label for="theme">Appearance</label>
+    <select id="theme">
+      <option value="system">System</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+    <p id="account-detail" class="small"></p>
+    <label for="model">ChatGPT model</label><select id="model"></select>
+    <p class="muted small">Choose a model that accepts images. Available models come from your ChatGPT account.</p>
+    <div class="settings-actions"><button id="reconnect" class="secondary-button">Continue with ChatGPT</button><button id="signout" class="quiet-button">Sign out</button><button id="permissions" class="quiet-button">Screen recording settings ↗</button><a class="text-link" href="https://chatgpt.com/#settings/Usage" target="_blank" rel="noreferrer">Manage ChatGPT usage ↗</a></div>
+    <p class="muted small">Chats last until you start a new chat or quit Zen. When you send a question, Echo sends the readable page text and your message to OpenAI.</p>
+  </section>
   <main id="conversation" aria-label="Conversation">
     <section id="welcome" class="welcome">
       <h1>What should we work on today?</h1>
