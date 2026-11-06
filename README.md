@@ -12,13 +12,13 @@ Echo opens a temporary chat beside the page you’re studying in Zen on macOS. C
 4. Choose **Continue with ChatGPT** to use your [ChatGPT plan](https://developers.openai.com/siwc/quickstart). Sign in with your Plus account and authorize Echo.
 5. Ask a question in the sidebar. If you use **Snapshot**, macOS may prompt for screen recording access for Echo or Zen.
 
-If Zen reports that the Mac helper is unavailable, double-click **Echo Setup.command** in Finder to install and register it. Zen unloads temporary add-ons when it quits. Repeat steps 1 and 2 after a restart.
+If Zen reports that the Mac helper is unavailable, double-click **Echo Setup.command** in Finder to install and register `~/Applications/Echo.app`. This also replaces a previous `StudyLens.app` install. If Echo is already loaded from this folder, click **Reload** on Zen’s debugging page after updating. Zen unloads temporary add-ons when it quits. Repeat steps 1 and 2 after a restart.
 
 The sidebar uses Zen’s sidebar position setting. If Echo misses page context after you switch tabs, open it from that tab with **⌘⇧U** to grant access. Use Snapshot for built-in PDFs, browser pages that block access, or material that is only shown as an image.
 
 ## How it works
 
-The Zen extension reads the selected tab only after a toolbar click or shortcut grants access. It refreshes the page text when you send a message. Page text and snapshots go to OpenAI with the question you submit. The Swift helper handles sign-in, model requests, and optional screen capture. It stores your sign-in credentials in the Mac Keychain. The extension holds the chat in memory.
+The Zen extension reads the selected tab only after a toolbar click or shortcut grants access. It refreshes the page text when you send a message. Page text and snapshots go to OpenAI with the question you submit. Zen starts the Mac helper when Echo needs it. The helper waits for requests when idle and exits when Zen closes its connection. It handles sign-in, model requests, and optional screen capture, and stores your sign-in credentials in the Mac Keychain. The extension holds the chat in memory.
 
 ## Development
 
