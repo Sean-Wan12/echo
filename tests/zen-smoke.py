@@ -78,6 +78,8 @@ user_pref("browser.aboutwelcome.enabled", false);
 user_pref("datareporting.policy.dataSubmissionEnabled", false);
 user_pref("app.update.auto", false);
 user_pref("layout.css.prefers-color-scheme.content-override", 1);
+// Zen otherwise ignores extension-provided native sidebar colors.
+user_pref("zen.theme.disable-lightweight", false);
 ''')
         addon = directory / "study-lens.xpi"
         with zipfile.ZipFile(addon, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -158,6 +160,29 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
                         })().catch(error => done({ error: error.message }));
                     """, args=[])["value"]
                     assert theme_check == {"initial": "system", "dark": "dark", "saved": "dark", "light": "light"}, theme_check
+                    for selected, background, foreground in (
+                        ("dark", "rgb(27, 27, 32)", "rgb(239, 237, 241)"),
+                        ("light", "rgb(248, 248, 250)", "rgb(36, 36, 42)"),
+                        ("system", "rgb(248, 248, 250)", "rgb(36, 36, 42)"),
+                    ):
+                        driver.call("WebDriver:ExecuteAsyncScript", script="""
+                            const done = arguments[arguments.length - 1];
+                            const extension = window.wrappedJSObject?.browser ?? window.browser;
+                            extension.storage.local.set({theme: arguments[0]}).then(done);
+                        """, args=[selected])
+                        driver.call("Marionette:SetContext", value="chrome")
+                        deadline = time.monotonic() + 4
+                        while True:
+                            native_colors = driver.script("""
+                                return [getComputedStyle(document.getElementById('sidebar-box')).backgroundColor,
+                                  getComputedStyle(document.getElementById('sidebar-header')).color];
+                            """)
+                            if native_colors == [background, foreground]:
+                                break
+                            assert time.monotonic() < deadline, (selected, native_colors)
+                            time.sleep(.05)
+                        driver.call("Marionette:SetContext", value="content")
+                    print("Zen's native Echo title row follows Dark, Light and System appearance.")
                     stream_check = driver.call("WebDriver:ExecuteAsyncScript", script=r"""
                         const done = arguments[arguments.length - 1];
                         const extension = window.wrappedJSObject?.browser ?? window.browser;
