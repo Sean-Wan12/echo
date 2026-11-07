@@ -1,9 +1,9 @@
 {
   "manifest_version": 2,
   "name": "Echo",
-  "version": "0.4.7",
+  "version": "0.5.0",
   "description": "Ask questions about the current page in a temporary study chat.",
-  "browser_specific_settings": { "gecko": { "id": "study-lens@local", "strict_min_version": "126.0" } },
+  "browser_specific_settings": { "gecko": { "id": "study-lens@local", "strict_min_version": "140.0", "data_collection_permissions": { "required": ["websiteContent", "browsingActivity", "personalCommunications", "authenticationInfo", "personallyIdentifyingInfo"] } } },
   "permissions": ["activeTab", "nativeMessaging", "storage"],
   "optional_permissions": ["<all_urls>"],
   "background": { "page": "background.html", "persistent": true },
