@@ -6,12 +6,15 @@ let account = { connected: false }, models = [], model = "", nativePort = null;
 const pending = new Map(), subscribers = new Map(), pages = new Map();
 const navigations = new Map();
 let streamUpdate = null;
+let chatSession = 0;
+let contextError = "";
 const ready = browser.storage.local.get("model").then(saved => { model = saved.model || ""; });
 
 function snapshot(windowId) {
   const page = pages.get(windowId);
   const pageInfo = page ? { status: page.status, title: page.title } : { status: "waiting" };
-  return { messages, page: pageInfo, busy, activity, error, account, models, model, tabCaptureReady: true };
+  return { messages, page: pageInfo, busy, activity, error, contextError, account, models, model,
+    tabCaptureReady: true, contextRequired: true, version: browser.runtime.getManifest().version };
 }
 
 function publish() {
@@ -34,7 +37,7 @@ async function captureTabImage(windowId, tab) {
   return image.startsWith("data:image/jpeg;base64,") && image.length <= 5_000_000 ? image : null;
 }
 
-async function readPage(windowId) {
+async function readPage(windowId, session) {
   const navigation = navigations.get(windowId);
   pages.set(windowId, { status: "reading" });
   publish();
@@ -59,7 +62,7 @@ async function readPage(windowId) {
   } catch {
     // Zen restricts access to browser pages, its PDF viewer, and tabs without an active grant.
   }
-  if (navigations.get(windowId) !== navigation) return null;
+  if (session !== chatSession || navigations.get(windowId) !== navigation) return null;
   pages.set(windowId, page);
   publish();
   return page.status === "ready" ? { ...page, image } : null;
@@ -67,8 +70,10 @@ async function readPage(windowId) {
 
 function connectNative() {
   if (nativePort) return nativePort;
-  nativePort = browser.runtime.connectNative("com.studylens.helper");
-  nativePort.onMessage.addListener(message => {
+  const port = browser.runtime.connectNative("com.studylens.helper");
+  nativePort = port;
+  port.onMessage.addListener(message => {
+    if (nativePort !== port) return;
     const request = pending.get(message.id);
     if (!request) return;
     if (message.event === "delta") { request.delta?.(message.text); return; }
@@ -77,7 +82,8 @@ function connectNative() {
     if (message.ok) request.resolve(message.result);
     else request.reject(new Error(message.error || "The Mac helper could not complete this request."));
   });
-  nativePort.onDisconnect.addListener(port => {
+  port.onDisconnect.addListener(() => {
+    if (nativePort !== port) return;
     nativePort = null;
     const reason = port.error?.message;
     for (const request of pending.values()) {
@@ -88,7 +94,31 @@ function connectNative() {
     account = { connected: false };
     publish();
   });
-  return nativePort;
+  return port;
+}
+
+function clearConversation() {
+  chatSession++;
+  messages = [];
+  lastPage = null;
+  pages.clear();
+  busy = false;
+  activity = "";
+  error = "";
+  contextError = "";
+  publish();
+}
+
+function closeConversation() {
+  clearConversation();
+  const port = nativePort;
+  nativePort = null;
+  for (const request of pending.values()) {
+    clearTimeout(request.timer);
+    request.reject(new Error("The conversation was closed."));
+  }
+  pending.clear();
+  port?.disconnect();
 }
 function native(method, params = {}, delta) {
   return new Promise((resolve, reject) => {
@@ -112,7 +142,7 @@ async function status() {
   }
 }
 
-async function generate(page) {
+async function generate(page, session) {
   if (!model) throw new Error("No models are available. Reconnect ChatGPT or choose a model in settings.");
   const input = apiInput(messages, page);
   const assistant = { id: crypto.randomUUID(), role: "assistant", text: "", status: "streaming" };
@@ -121,10 +151,12 @@ async function generate(page) {
   publish();
   try {
     const result = await native("respond", { model, input }, text => {
+      if (session !== chatSession) return;
       assistant.text += text;
       activity = "Writing your explanation…";
       if (streamUpdate === null) streamUpdate = setTimeout(publish, 75);
     });
+    if (session !== chatSession) return;
     assistant.text = result.text || assistant.text;
     if (!assistant.text.trim()) throw new Error("ChatGPT returned no explanation. Try again or choose a different model.");
     assistant.status = "complete";
@@ -138,15 +170,15 @@ function addQuestion(text, { image, tabImage } = {}) {
   messages.push({ id: crypto.randomUUID(), role: "user", text, image, tabImage, status: "complete" });
 }
 
-async function capture() {
+async function capture(session) {
   if (!account.connected) throw new Error("Connect ChatGPT first.");
   activity = "Drag around your question · Esc to cancel";
   publish();
   const result = await native("capture");
-  if (result.cancelled) return;
+  if (session !== chatSession || result.cancelled) return;
   lastPage = null;
   addQuestion("", { image: result.image });
-  await generate(null);
+  await generate(null, session);
 }
 
 async function action(message) {
@@ -158,6 +190,8 @@ async function action(message) {
     throw new Error("Wait for the current explanation or capture to finish.");
   }
   error = "";
+  const session = chatSession;
+  let accepted = false;
   busy = true;
   publish();
   try {
@@ -179,27 +213,35 @@ async function action(message) {
         lastPage = null;
         break;
       case "capture":
-        await capture();
+        contextError = "";
+        await capture(session);
         break;
       case "send": {
         const text = message.text?.trim();
         if (!text) break;
         if (!account.connected) throw new Error("Connect ChatGPT first.");
         activity = "Reading the current page…";
-        lastPage = await readPage(windowId);
+        const page = await readPage(windowId, session);
+        if (session !== chatSession) break;
+        if (!page?.image && !message.allowTextOnly) {
+          contextError = "Echo couldn’t attach a view of this tab. Enable tab access or reopen Echo from this tab, then try again. You can also select the area with Snapshot.";
+          break;
+        }
+        contextError = "";
+        lastPage = page;
         addQuestion(text, { tabImage: Boolean(lastPage?.image) });
-        await generate(lastPage);
+        accepted = true;
+        await generate(lastPage, session);
         break;
       }
       case "retry":
         if (!account.connected) throw new Error("Connect ChatGPT first.");
         messages = messages.filter(item => item.status !== "error");
         if (messages.at(-1)?.role !== "user") throw new Error("Send a question first.");
-        await generate(lastPage);
+        await generate(lastPage, session);
         break;
       case "new":
-        messages = [];
-        lastPage = null;
+        clearConversation();
         break;
       case "model":
         if (!models.some(item => item.id === message.model)) throw new Error("Choose an available model.");
@@ -210,18 +252,21 @@ async function action(message) {
         await native("permissions");
         break;
       case "dismiss":
+        contextError = "";
         break;
       default:
         throw new Error("Unknown Echo action.");
     }
   } catch (e) {
-    error = e.message;
+    if (session === chatSession) error = e.message;
   } finally {
-    busy = false;
-    activity = "";
-    publish();
+    if (session === chatSession) {
+      busy = false;
+      activity = "";
+      publish();
+    }
   }
-  return snapshot(windowId);
+  return { ...snapshot(windowId), accepted };
 }
 
 browser.runtime.onConnect.addListener(port => {
@@ -231,13 +276,21 @@ browser.runtime.onConnect.addListener(port => {
   ready.then(() => {
     if (subscribers.has(port)) port.postMessage(snapshot(windowId));
   });
-  port.onDisconnect.addListener(() => subscribers.delete(port));
+  port.onDisconnect.addListener(() => {
+    subscribers.delete(port);
+    if (!subscribers.size) closeConversation();
+  });
 });
 browser.runtime.onMessage.addListener(action);
 
-browser.browserAction.onClicked.addListener(() => {
+function toggleSidebar() {
   // The sidebar toggle must run inside the toolbar click or shortcut handler.
   return browser.sidebarAction.toggle().catch(e => { error = e.message; publish(); });
+}
+
+browser.browserAction.onClicked.addListener(toggleSidebar);
+browser.commands.onCommand.addListener(command => {
+  if (command === "toggle-echo") return toggleSidebar();
 });
 
 function invalidatePage(windowId) {
