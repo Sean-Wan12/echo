@@ -17,6 +17,7 @@ browser.runtime.onConnect.addListener(port => {
     messages = fixture.messages;
     busy = fixture.busy;
     if ("authPending" in fixture) authPending = fixture.authPending;
+    if ("authURL" in fixture) authURL = fixture.authURL;
     if (fixture.account) account = fixture.account;
     if (fixture.models) models = fixture.models;
     if (fixture.model) model = fixture.model;
@@ -301,21 +302,22 @@ user_pref("zen.theme.disable-lightweight", false);
                         (async () => {
                           await new Promise(resolve => {
                             port.onMessage.addListener(resolve);
-                            port.postMessage({messages: [], busy: true, authPending: true, account: {connected: false}});
+                            port.postMessage({messages: [], busy: true, authPending: true, authURL: 'https://auth.openai.com/api/accounts/authorize?state=fixture', account: {connected: false}});
                           });
                           await new Promise(resolve => requestAnimationFrame(resolve));
                           const panel = document.querySelector('#signin-progress');
                           const cancel = document.querySelector('#signin-cancel');
                           const restart = document.querySelector('#signin-restart');
                           const recovery = !panel.hidden && !cancel.disabled && !restart.disabled;
+                          const openAvailable = !document.querySelector('#signin-open').hidden && !document.querySelector('#signin-open').disabled;
                           cancel.click();
                           await new Promise(resolve => requestAnimationFrame(resolve));
                           const normal = document.querySelector('#signin');
-                          done({recovery, restored: panel.hidden && !document.querySelector('#connect-card').hidden && !normal.disabled});
+                          done({recovery, openAvailable, restored: panel.hidden && !document.querySelector('#connect-card').hidden && !normal.disabled});
                           port.disconnect();
                         })().catch(error => done({error: error.message}));
                     """, args=[])["value"]
-                    assert login_recovery == {"recovery": True, "restored": True}, login_recovery
+                    assert login_recovery == {"recovery": True, "openAvailable": True, "restored": True}, login_recovery
                     print("Pending sign-in keeps recovery buttons available and Cancel restores Continue with ChatGPT.")
                     driver.script("document.querySelector('#new-chat').click();")
                     if options.require_helper:
