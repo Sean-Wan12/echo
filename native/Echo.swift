@@ -57,7 +57,11 @@ final class Helper: NSObject {
                     guard !selecting else { throw LensError("Finish the current screenshot first.") }
                     selecting = true; defer { selecting = false }
                     result = try await ScreenCapture.select()
-                case "signin": try await chatgpt.signIn(); result = try chatgpt.status()
+                case "signin":
+                    if params["browserAuthorization"] as? Bool == true {
+                        try await chatgpt.signIn { url in self.write(["id": id, "event": "authorization", "url": url.absoluteString]) }
+                    } else { try await chatgpt.signIn() }
+                    result = try chatgpt.status()
                 case "signout": try chatgpt.signOut(); result = try chatgpt.status()
                 case "models": result = try await chatgpt.models()
                 case "respond":
