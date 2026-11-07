@@ -19,6 +19,8 @@ If the Mac helper is unavailable, double-click **Echo Setup.command** to install
 
 For development only, open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** and select `dist/Echo.xpi`. This installation lasts only until Zen quits. Do not use it as the everyday installation.
 
+Echo’s Light, Dark, and System appearance also colors Zen’s native Echo title/close row while Echo is open. Zen must allow extension themes: in `about:config`, set `zen.theme.disable-lightweight` to `false`. With that setting enabled, changing Echo’s appearance updates its title row automatically; closing Echo restores the previous sidebar theme. Install the newly signed XPI when updating from 0.5.0, since edits to source files do not change the installed extension.
+
 The sidebar uses Zen’s sidebar position setting. With automatic access off, open Echo from the tab with **⌘⇧U** to grant access to that tab. Scroll images, diagrams, and PDF slides into view before sending. **Tab image included** confirms that Echo attached the visible area. Use **Snapshot** to select a smaller region or if Zen blocks access to the tab.
 
 If the tab image cannot be attached, Echo keeps your draft and asks you to enable access or retry. **Enable tab access and retry** resumes that question after approval. **Send without tab image** explicitly allows a text-only request.
