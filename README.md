@@ -25,6 +25,8 @@ The sidebar uses Zen’s sidebar position setting. With automatic access off, op
 
 If the tab image cannot be attached, Echo keeps your draft and asks you to enable access or retry. **Enable tab access and retry** resumes that question after approval. **Send without tab image** explicitly allows a text-only request.
 
+If Echo says **Finish signing in in your browser**, complete the OpenAI sign-in page in your browser. **Restart sign-in** cancels a missing or abandoned attempt and opens a fresh one. **Cancel sign-in** immediately returns to **Continue with ChatGPT**. Closing and reopening Echo also cancels a pending sign-in.
+
 ## How it works
 
 When you send a question, the extension reads the active tab’s accessible text and captures its visible area. The image excludes other windows and the desktop. Page context and manual snapshots go to OpenAI with the question you submit. You can turn off automatic access in Echo’s settings. Zen starts the Mac helper when Echo needs it. The helper waits for requests when idle and exits when Zen closes its connection. It handles sign-in, model requests, and optional screen capture, and stores your sign-in credentials in the Mac Keychain. The extension holds the chat in memory.
