@@ -126,8 +126,10 @@ function update(next) {
   state = next;
   const needsReload = !state.contextRequired;
   $("welcome").hidden = state.messages.length > 0;
-  $("connect-card").hidden = state.account.connected;
-  $("composer").hidden = !state.account.connected;
+  const signingIn = state.authPending === true;
+  $("signin-progress").hidden = !signingIn;
+  $("connect-card").hidden = state.account.connected || signingIn;
+  $("composer").hidden = !state.account.connected || signingIn;
   $("status").hidden = !state.busy;
   $("status-text").textContent = state.activity || "One moment…";
   $("error").hidden = !needsReload && !state.error;
@@ -155,6 +157,16 @@ function update(next) {
   }
 }
 for (const id of ["signin", "reconnect"]) $(id).onclick = () => send("signin");
+$("signin-cancel").onclick = () => send("cancel-signin");
+let restartingSignIn = false;
+$("signin-restart").onclick = async () => {
+  if (restartingSignIn) return;
+  restartingSignIn = true;
+  try {
+    const cancelled = await send("cancel-signin");
+    if (cancelled && !cancelled.busy) void send("signin");
+  } finally { restartingSignIn = false; }
+};
 $("capture").onclick = () => send("capture");
 $("new-chat").onclick = () => send("new");
 $("settings-toggle").onclick = () => { $("settings").hidden = !$("settings").hidden; };
