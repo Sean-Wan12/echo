@@ -8,6 +8,8 @@
 .copy-reply { margin-top: 4px; }
 #settings-toggle { display: grid; place-items: center; padding: 0; }
 .topbar { background: var(--bg); color: var(--ink); }
+.signin-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.signin-actions button { min-width: 0; }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
