@@ -1,9 +1,11 @@
 import { apiInput } from "./store.js";
+import { sidebarTheme } from "./sidebar-theme.js";
 
 let messages = [];
 let busy = false, activity = "", error = "", lastPage = null;
 let account = { connected: false }, models = [], model = "", nativePort = null;
 const pending = new Map(), subscribers = new Map(), pages = new Map();
+const nativeSidebarTheme = sidebarTheme(browser.theme);
 const navigations = new Map();
 let streamUpdate = null;
 let chatSession = 0;
@@ -185,6 +187,10 @@ async function capture(session) {
 
 async function action(message) {
   const { type, windowId } = message;
+  if (type === "sidebar-theme") {
+    if ([...subscribers.values()].includes(windowId)) await nativeSidebarTheme.apply(windowId, message.dark === true);
+    return;
+  }
   await ready;
   if (type === "state") return snapshot(windowId);
   if (busy) {
@@ -280,6 +286,9 @@ browser.runtime.onConnect.addListener(port => {
   });
   port.onDisconnect.addListener(() => {
     subscribers.delete(port);
+    if (![...subscribers.values()].includes(windowId)) {
+      nativeSidebarTheme.restore(windowId).catch(console.warn);
+    }
     if (!subscribers.size) closeConversation();
   });
 });
