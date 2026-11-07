@@ -1,4 +1,4 @@
-"""Build a complete temporary add-on so Zen can load every sidebar asset."""
+"""Build the complete unsigned add-on for Mozilla signing or development."""
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from zipfile import ZIP_DEFLATED, ZipFile
