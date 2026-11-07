@@ -14,7 +14,9 @@ This archives the extension directory into `dist/Echo.xpi`. Do not upload the wh
 
 ## Third-party library
 
-The unmodified bundled KaTeX release is **0.19.1**, including auto-render, CSS, fonts and its MIT license. Official release/source: https://github.com/KaTeX/KaTeX/releases/tag/v0.19.1 . Repository: https://github.com/KaTeX/KaTeX . These are the only minified JavaScript libraries in the package; first-party code does not need a source build.
+The unmodified bundled KaTeX release is **0.19.1**, including auto-render, CSS, fonts and its MIT license. Official release/source: https://github.com/KaTeX/KaTeX/releases/tag/v0.19.1 . Repository: https://github.com/KaTeX/KaTeX . These are the only minified JavaScript libraries in the package; first-party code does not need a source build. Every bundled library file was compared byte-for-byte with the official npm `katex@0.19.1` release before submission. Declare source processing in Mozilla’s form and supply `dist/Echo-source.zip`, which includes the upstream KaTeX source and lockfile alongside Echo’s readable source.
+
+To rebuild KaTeX, use its supplied `package.json`, `pnpm-lock.yaml`, and build configuration in `third-party/KaTeX-0.19.1/`: install Node.js and pnpm 11.4.0, then run `pnpm install --frozen-lockfile` and `pnpm build`. The extension uses the official release’s `dist/katex.min.js`, `dist/katex.min.css`, `dist/contrib/auto-render.min.js`, `dist/fonts/`, and LICENSE. The included official release tarball also permits independent byte comparison without rebuilding the upstream library.
 
 ## Functionality and permissions
 
