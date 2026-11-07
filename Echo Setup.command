@@ -51,4 +51,4 @@ function run(args) {
 JXA
 registered=1
 if is_echo "$legacy"; then mv "$legacy" "$scratch/previous-StudyLens.app"; fi
-printf '\nEcho installed at %s. In Zen, open about:debugging#/runtime/this-firefox,\nchoose Load Temporary Add-on, and select the newly built package:\n\n%s\n\nOpen Echo with Command+Shift+U.\n' "$app" "$root/dist/Echo.xpi"
+printf '\nEcho helper installed at %s. In Zen, open about:addons,\nchoose the gear menu → Install Add-on From File, and select the signed update:\n\n%s\n\nOpen Echo with Command+Shift+U. The unsigned Echo.xpi is for Mozilla signing or temporary development only.\n' "$app" "$root/dist/Echo-signed.xpi"
