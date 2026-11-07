@@ -111,6 +111,8 @@ function clearConversation() {
 
 function closeConversation() {
   clearConversation();
+  // Reuse the helper's authenticated idle session when there is no work to cancel.
+  if (!pending.size) return;
   const port = nativePort;
   nativePort = null;
   for (const request of pending.values()) {
