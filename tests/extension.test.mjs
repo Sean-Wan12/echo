@@ -39,6 +39,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
   let heldResponse = null, responseStarted = null;
   let holdResponse = false;
   let heldRead = null, readStarted = null;
+  let connected = true, heldSignIn = null, signInStarted = null;
   const nativePort = {
     onMessage: event(), onDisconnect: event(),
     postMessage({ id, method, params }) {
@@ -46,7 +47,15 @@ test("send captures only the current tab and keeps manual snapshots available", 
         const ok = result => this.onMessage.emit({ id, ok: true, result });
         switch (method) {
           case "status":
-            ok({ connected: true });
+            ok({ connected });
+            break;
+          case "signout":
+            connected = false;
+            ok({ connected: false });
+            break;
+          case "signin":
+            heldSignIn = { id, port: this };
+            signInStarted();
             break;
           case "models":
             ok([{ id: "vision", name: "Vision" }]);
@@ -225,4 +234,41 @@ test("send captures only the current tab and keeps manual snapshots available", 
   assert.equal(requests.length, beforeClose);
   assert.equal((await action("state")).messages.length, 0);
   assert.equal((await action("state")).busy, false);
+
+  await action("signout");
+  assert.equal((await action("state")).account.connected, false);
+  let startedSignIn = new Promise(resolve => { signInStarted = resolve; });
+  const abandonedSignIn = action("signin");
+  await startedSignIn;
+  assert.equal((await action("state")).authPending, true);
+  const abandoned = heldSignIn;
+  const cancelled = await action("cancel-signin");
+  assert.equal(cancelled.busy, false);
+  assert.equal(cancelled.authPending, false);
+  assert.equal(cancelled.account.connected, false);
+  assert.equal(cancelled.error, "");
+  await abandonedSignIn;
+
+  startedSignIn = new Promise(resolve => { signInStarted = resolve; });
+  const freshSignIn = action("signin");
+  await startedSignIn;
+  abandoned.port.onMessage.emit({ id: abandoned.id, ok: true, result: { connected: true } });
+  assert.equal((await action("state")).authPending, true, "An old attempt changed the new sign-in");
+  connected = true;
+  heldSignIn.port.onMessage.emit({ id: heldSignIn.id, ok: true, result: { connected: true } });
+  const signedIn = await freshSignIn;
+  assert.equal(signedIn.account.connected, true);
+  assert.equal(signedIn.authPending, false);
+  assert.equal(signedIn.busy, false);
+
+  await action("signout");
+  startedSignIn = new Promise(resolve => { signInStarted = resolve; });
+  const declinedSignIn = action("signin");
+  await startedSignIn;
+  heldSignIn.port.onMessage.emit({ id: heldSignIn.id, ok: false, error: "Sign-in was declined." });
+  const declined = await declinedSignIn;
+  assert.equal(declined.authPending, false);
+  assert.equal(declined.busy, false);
+  assert.equal(declined.account.connected, false);
+  assert.match(declined.error, /declined/);
 });
