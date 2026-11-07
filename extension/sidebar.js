@@ -11,6 +11,7 @@ let automaticTabAccess = false;
 async function updateTabAccess() {
   automaticTabAccess = await browser.permissions.contains(tabAccess);
   $("tab-access").textContent = automaticTabAccess ? "Turn off automatic access" : "Enable tab access";
+  $("context-access").textContent = automaticTabAccess ? "Retry tab view" : "Enable tab access and retry";
   $("tab-access-status").textContent = automaticTabAccess ? "On for the active tab when you send." : "Open Echo from a tab to grant access just to that tab.";
   $("tab-access-label").textContent = automaticTabAccess ? "Automatic tab access on" : "Visible tab on send";
 }
@@ -27,7 +28,11 @@ browser.storage.onChanged.addListener((changes, area) => {
 });
 
 const send = async (type, extra = {}) => {
-  try { const next = await browser.runtime.sendMessage({ type, windowId, ...extra }); if (next) update(next); }
+  try {
+    const next = await browser.runtime.sendMessage({ type, windowId, ...extra });
+    if (next) update(next);
+    return next;
+  }
   catch (e) { $("error").hidden = false; $("error-text").textContent = e.message; }
 };
 
@@ -116,7 +121,7 @@ function renderMessages() {
 }
 function update(next) {
   state = next;
-  const needsReload = !state.tabCaptureReady;
+  const needsReload = !state.contextRequired;
   $("welcome").hidden = state.messages.length > 0;
   $("connect-card").hidden = state.account.connected;
   $("composer").hidden = !state.account.connected;
@@ -125,8 +130,11 @@ function update(next) {
   $("error").hidden = !needsReload && !state.error;
   $("error-text").textContent = needsReload ? "Reload Echo from Zen’s debugging page to finish the update." : state.error;
   $("error-close").hidden = needsReload;
+  $("context-error").hidden = needsReload || !state.contextError;
+  $("context-error-text").textContent = state.contextError || "";
+  $("app-version").textContent = state.version ? `Echo ${state.version}` : "Reload required";
   $("retry").hidden = needsReload || !state.messages.some(m => m.role === "user") || state.messages.at(-1)?.status === "complete" && state.messages.at(-1)?.role === "assistant";
-  for (const id of ["signin", "capture", "send", "new-chat", "reconnect", "signout", "model", "permissions", "retry", "question"]) $(id).disabled = state.busy;
+  for (const id of ["signin", "capture", "send", "new-chat", "reconnect", "signout", "model", "permissions", "retry", "question", "context-access", "send-text-only"]) $(id).disabled = state.busy;
   for (const id of ["capture", "send", "question"]) $(id).disabled ||= needsReload;
   $("account-detail").textContent = state.account.connected ? `Connected${state.account.email ? " as " + state.account.email : " to ChatGPT"}.` : "Connect ChatGPT to start studying.";
   $("connection-label").textContent = state.account.connected ? "● Using ChatGPT plan" : "Your space to understand.";
@@ -160,6 +168,16 @@ $("tab-access").onclick = async () => {
 browser.permissions.onAdded.addListener(updateTabAccess);
 browser.permissions.onRemoved.addListener(updateTabAccess);
 void updateTabAccess();
+$("context-access").onclick = async () => {
+  try {
+    const granted = automaticTabAccess || await browser.permissions.request(tabAccess);
+    await updateTabAccess();
+    if (granted) await submitQuestion();
+  } catch {
+    $("context-error-text").textContent = "Zen couldn’t enable tab access. Reopen Echo from this tab or use Snapshot.";
+  }
+};
+$("send-text-only").onclick = () => submitQuestion(true);
 $("theme").onchange = async event => {
   const theme = event.target.value;
   setTheme(theme);
@@ -174,9 +192,25 @@ $("plan-dismiss").onclick = () => {
   browser.storage.local.set({ planNoticeSeen: true });
   $("plan-dialog").close();
 };
-$("composer").onsubmit = event => { event.preventDefault(); const text = $("question").value.trim(); if (!text || !state?.tabCaptureReady || state.busy) return; $("question").value = ""; $("question").style.height = "auto"; send("send", { text }); };
+async function submitQuestion(allowTextOnly = false) {
+  const question = $("question");
+  const text = question.value.trim();
+  if (!text || !state?.contextRequired || state.busy) return;
+  question.value = "";
+  question.style.height = "auto";
+  const next = await send("send", { text, allowTextOnly });
+  if (!next?.accepted && !question.value) {
+    question.value = text;
+    resizeQuestion();
+  }
+}
+$("composer").onsubmit = event => { event.preventDefault(); void submitQuestion(); };
 $("question").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); $("composer").requestSubmit(); } };
-$("question").oninput = () => { $("question").style.height = "auto"; $("question").style.height = Math.min($("question").scrollHeight, 130) + "px"; };
+function resizeQuestion() {
+  $("question").style.height = "auto";
+  $("question").style.height = Math.min($("question").scrollHeight, 130) + "px";
+}
+$("question").oninput = resizeQuestion;
 const port = browser.runtime.connect({ name: `sidebar:${windowId}` }); port.onMessage.addListener(update);
 await send("state");
 await send("status");
