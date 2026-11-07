@@ -7,6 +7,7 @@
 .message-content { user-select: text; }
 .copy-reply { margin-top: 4px; }
 #settings-toggle { display: grid; place-items: center; padding: 0; }
+.topbar { background: var(--bg); color: var(--ink); }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
