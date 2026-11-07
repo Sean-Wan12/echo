@@ -128,6 +128,7 @@ function update(next) {
   $("welcome").hidden = state.messages.length > 0;
   const signingIn = state.authPending === true;
   $("signin-progress").hidden = !signingIn;
+  $("signin-open").hidden = !signingIn || !state.authURL;
   $("connect-card").hidden = state.account.connected || signingIn;
   $("composer").hidden = !state.account.connected || signingIn;
   $("status").hidden = !state.busy;
@@ -158,6 +159,7 @@ function update(next) {
 }
 for (const id of ["signin", "reconnect"]) $(id).onclick = () => send("signin");
 $("signin-cancel").onclick = () => send("cancel-signin");
+$("signin-open").onclick = () => send("open-signin");
 let restartingSignIn = false;
 $("signin-restart").onclick = async () => {
   if (restartingSignIn) return;
