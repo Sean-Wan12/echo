@@ -99,7 +99,7 @@ final class ChatGPTClient {
 
     func status() throws -> JSONObject {
         try load()
-        return ["connected": credentials != nil, "email": credentials?.email ?? ""]
+        return ["connected": credentials != nil, "email": credentials?.email ?? "", "browserSignIn": true]
     }
     private func load() throws {
         guard !loaded else { return }
@@ -109,7 +109,7 @@ final class ChatGPTClient {
         try CredentialVault.delete(); credentials = nil; loaded = true
     }
 
-    func signIn() async throws {
+    func signIn(openURL: ((URL) -> Void)? = nil) async throws {
         guard !signingIn else { throw LensError("ChatGPT sign-in is already open.") }
         signingIn = true; defer { signingIn = false }
         try load()
@@ -129,10 +129,15 @@ final class ChatGPTClient {
             "scope": "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct",
             "state": state, "nonce": nonce, "code_challenge_method": "S256", "code_challenge": challenge
         ]
-        if let old { fields["id_token_hint"] = old.idToken }
+        if let old {
+            // Browser handoff needs only a public authorization URL, never an ID token.
+            if openURL == nil { fields["id_token_hint"] = old.idToken }
+        }
         else { fields["agent_name_hint"] = "Echo" }
         authorization.queryItems = fields.map { URLQueryItem(name: $0.key, value: $0.value) }
-        guard let url = authorization.url, NSWorkspace.shared.open(url) else { throw LensError("Could not open your browser to sign in to ChatGPT.") }
+        guard let url = authorization.url else { throw LensError("Could not prepare ChatGPT sign-in.") }
+        if let openURL { openURL(url) }
+        else if !NSWorkspace.shared.open(url) { throw LensError("Could not open your browser to sign in to ChatGPT.") }
         let result = try await callback.callback()
         if result["error"] != nil { throw LensError("ChatGPT sign-in was declined or could not complete.") }
         guard let code = result["code"], !code.isEmpty,
