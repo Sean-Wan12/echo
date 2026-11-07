@@ -20,9 +20,12 @@ function setTheme(theme) {
   const appearance = theme === "light" || theme === "dark" ? theme : "system";
   document.documentElement.dataset.theme = appearance;
   $("theme").value = appearance;
+  const dark = appearance === "dark" || appearance === "system" && matchMedia("(prefers-color-scheme: dark)").matches;
+  browser.runtime.sendMessage({ type: "sidebar-theme", windowId, dark }).catch(console.warn);
 }
 
 setTheme(preferences.theme);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => setTheme($("theme").value));
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.theme) setTheme(changes.theme.newValue);
 });
@@ -212,5 +215,6 @@ function resizeQuestion() {
 }
 $("question").oninput = resizeQuestion;
 const port = browser.runtime.connect({ name: `sidebar:${windowId}` }); port.onMessage.addListener(update);
+setTheme($("theme").value);
 await send("state");
 await send("status");
