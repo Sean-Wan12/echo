@@ -10,12 +10,13 @@ const navigations = new Map();
 let streamUpdate = null;
 let chatSession = 0;
 let contextError = "";
+let authPending = false;
 const ready = browser.storage.local.get("model").then(saved => { model = saved.model || ""; });
 
 function snapshot(windowId) {
   const page = pages.get(windowId);
   const pageInfo = page ? { status: page.status, title: page.title } : { status: "waiting" };
-  return { messages, page: pageInfo, busy, activity, error, contextError, account, models, model,
+  return { messages, page: pageInfo, busy, activity, error, contextError, authPending, account, models, model,
     tabCaptureReady: true, contextRequired: true, version: browser.runtime.getManifest().version };
 }
 
@@ -108,18 +109,22 @@ function clearConversation() {
   activity = "";
   error = "";
   contextError = "";
+  authPending = false;
   publish();
 }
 
 function closeConversation() {
   clearConversation();
+  disconnectPending("The conversation was closed.");
+}
+function disconnectPending(reason) {
   // Reuse the helper's authenticated idle session when there is no work to cancel.
   if (!pending.size) return;
   const port = nativePort;
   nativePort = null;
   for (const request of pending.values()) {
     clearTimeout(request.timer);
-    request.reject(new Error("The conversation was closed."));
+    request.reject(new Error(reason));
   }
   pending.clear();
   port?.disconnect();
@@ -187,6 +192,18 @@ async function capture(session) {
 
 async function action(message) {
   const { type, windowId } = message;
+  if (type === "cancel-signin") {
+    if (authPending) {
+      chatSession++;
+      authPending = false;
+      busy = false;
+      activity = "";
+      error = "";
+      disconnectPending("Sign-in was cancelled.");
+      publish();
+    }
+    return snapshot(windowId);
+  }
   if (type === "sidebar-theme") {
     if ([...subscribers.values()].includes(windowId)) await nativeSidebarTheme.apply(windowId, message.dark === true);
     return;
@@ -208,6 +225,7 @@ async function action(message) {
         await status();
         break;
       case "signin":
+        authPending = true;
         activity = "Finish signing in in your browser…";
         publish();
         await native("signin");
@@ -269,6 +287,7 @@ async function action(message) {
     if (session === chatSession) error = e.message;
   } finally {
     if (session === chatSession) {
+      authPending = false;
       busy = false;
       activity = "";
       publish();
