@@ -29,6 +29,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
   });
   const onMessage = event(), onClicked = event(), onCommand = event(), onConnect = event(), onActivated = event(), onUpdated = event();
   const actions = [], requests = [];
+  const openedTabs = [];
   let title = "Calculus notes", pageText = "Theorem 3.2.1. A differentiable function is continuous.";
   let url = "https://example.com/notes", imageBlocked = false, changeTabDuringCapture = false;
   let refreshDuringCapture = false;
@@ -54,6 +55,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
             ok({ connected: false });
             break;
           case "signin":
+            assert.equal(params.browserAuthorization, true);
             heldSignIn = { id, port: this };
             signInStarted();
             break;
@@ -104,6 +106,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
     },
     tabs: {
       onActivated, onUpdated,
+      create: async tab => { openedTabs.push(tab); return { id: 20 }; },
       query: async ({ windowId }) => [{ id: windowId, title, url, width: 900, height: 830 }],
       executeScript: async () => {
         actions.push("read");
@@ -242,12 +245,25 @@ test("send captures only the current tab and keeps manual snapshots available", 
   await startedSignIn;
   assert.equal((await action("state")).authPending, true);
   const abandoned = heldSignIn;
+  abandoned.port.onMessage.emit({id: abandoned.id, event: "authorization", url: "https://example.com/authorize"});
+  assert.equal(openedTabs.length, 0, "An untrusted sign-in destination opened");
+  abandoned.port.onMessage.emit({id: abandoned.id, event: "authorization", url: "https://auth.openai.com/api/accounts/authorize?id_token_hint=private"});
+  assert.equal(openedTabs.length, 0, "An identity token reached the browser handoff");
+  const authorizationURL = "https://auth.openai.com/api/accounts/authorize?state=test&code_challenge=proof";
+  abandoned.port.onMessage.emit({id: abandoned.id, event: "authorization", url: authorizationURL});
+  assert.deepEqual(openedTabs, [{windowId: 1, url: authorizationURL, active: true}]);
+  assert.equal((await action("state")).authURL, authorizationURL);
+  await action("open-signin");
+  assert.equal(openedTabs.length, 2, "The active sign-in page could not be reopened");
   const cancelled = await action("cancel-signin");
   assert.equal(cancelled.busy, false);
   assert.equal(cancelled.authPending, false);
+  assert.equal(cancelled.authURL, "");
   assert.equal(cancelled.account.connected, false);
   assert.equal(cancelled.error, "");
   await abandonedSignIn;
+  await action("open-signin");
+  assert.equal(openedTabs.length, 2, "A cancelled sign-in URL was reopened");
 
   startedSignIn = new Promise(resolve => { signInStarted = resolve; });
   const freshSignIn = action("signin");
@@ -259,6 +275,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
   const signedIn = await freshSignIn;
   assert.equal(signedIn.account.connected, true);
   assert.equal(signedIn.authPending, false);
+  assert.equal(signedIn.authURL, "");
   assert.equal(signedIn.busy, false);
 
   await action("signout");
