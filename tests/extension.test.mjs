@@ -34,6 +34,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
   let refreshDuringCapture = false;
   let blocked = false, cancelCapture = false;
   let sidebarOpen = false;
+  let nativeConnections = 0;
   let sidebarPort;
   let heldResponse = null, responseStarted = null;
   let holdResponse = false;
@@ -74,7 +75,10 @@ test("send captures only the current tab and keeps manual snapshots available", 
     runtime: {
       onMessage, onConnect,
       getManifest: () => JSON.parse(readFileSync(new URL("../extension/manifest.json", import.meta.url))),
-      connectNative: () => ({ ...nativePort, onMessage: event(), onDisconnect: event() })
+      connectNative: () => {
+        nativeConnections++;
+        return { ...nativePort, onMessage: event(), onDisconnect: event() };
+      }
     },
     storage: { local: { get: async () => ({}), set: async () => {} } },
     browserAction: { onClicked },
@@ -136,6 +140,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
   assert.equal((await action("state")).busy, false);
   await onCommand.emit("toggle-echo")[0];
   assert.deepEqual(actions.slice(-2), ["close", "open"]);
+  assert.equal(nativeConnections, 1, "Closing an idle chat restarted the authenticated helper");
   const beforeSwitch = [...actions];
   url = "https://example.com/quiz";
   onActivated.emit({ windowId: 1 });
@@ -149,6 +154,7 @@ test("send captures only the current tab and keeps manual snapshots available", 
   assert.match(scanQuestion[2].text, /feedback from other questions/);
   assert.match(scanQuestion[2].text, /Q9 Feedback/);
   assert.match(scanQuestion.at(-1).text, /Q10/);
+  assert.equal(nativeConnections, 1, "Reopening an idle chat read the Keychain again");
   blocked = true;
   await action("send", { text: "What animal is this?" });
   assert.equal(requests[2].input.length, 3);
