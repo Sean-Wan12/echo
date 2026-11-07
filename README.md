@@ -2,19 +2,21 @@
 
 Echo opens a temporary chat beside the page you’re studying in Zen on macOS. Click its toolbar button or press **⌘⇧U** to open or close the sidebar. When you send a question, Echo includes accessible page text and an image of the visible tab when Zen allows access. For unusually long pages, it picks text passages related to what you asked. Echo typesets each equation as soon as the reply contains the complete formula.
 
-**Snapshot** is available in the sidebar for diagrams, image-only content, and Zen’s built-in PDF viewer. Selecting a region sends the image for an explanation. **New chat** clears the current conversation. Conversations are held in memory and disappear when you quit Zen.
+**Snapshot** is available in the sidebar for diagrams, image-only content, and Zen’s built-in PDF viewer. Selecting a region sends the image for an explanation. **New chat** clears the current conversation. Closing Echo clears the conversation and stops its pending request. Press **⌘⇧U** to reopen it with a fresh chat.
 
 ## Open Echo
 
 1. Open **Zen**. Press **⌘L**, paste `about:debugging#/runtime/this-firefox` into the address bar, and press **Return**.
-2. Click **Load Temporary Add-on…**. In the file chooser, press **⌘⇧G**, paste the absolute path to this folder’s `extension/manifest.json`, and press **Return**. Select **Open**.
+2. Click **Load Temporary Add-on…**. In the file chooser, press **⌘⇧G**, paste the absolute path to this folder’s `dist/Echo.xpi`, and press **Return**. Select **Open**. Run `python3 scripts/package-extension.py` first if the package is missing or you have edited the extension.
 3. Go to a study webpage, then press **⌘⇧U** or choose **Echo** from Zen’s extensions menu.
 4. Choose **Continue with ChatGPT** to use your [ChatGPT plan](https://developers.openai.com/siwc/quickstart). Sign in with your Plus account and authorize Echo.
 5. For automatic access after switching tabs, open Echo’s **Settings → Enable tab access** and approve Zen’s website access prompt. Then ask a question in the sidebar. If you use **Snapshot**, macOS may prompt for screen recording access for Echo or Zen.
 
-If Zen reports that the Mac helper is unavailable, double-click **Echo Setup.command** in Finder to install and register `~/Applications/Echo.app`. This also replaces a previous `StudyLens.app` install. If Echo is already loaded from this folder, click **Reload** on Zen’s debugging page after updating. Zen unloads temporary add-ons when it quits. Repeat steps 1 and 2 after a restart.
+If Zen reports that the Mac helper is unavailable, double-click **Echo Setup.command** in Finder to install and register `~/Applications/Echo.app` and build the extension package. This also replaces a previous `StudyLens.app` install. After editing the extension, rebuild `dist/Echo.xpi` and load that package again. Settings shows the version that is actually running. Zen unloads temporary add-ons when it quits. Repeat steps 1 and 2 after a restart.
 
 The sidebar uses Zen’s sidebar position setting. With automatic access off, open Echo from the tab with **⌘⇧U** to grant access to that tab. Scroll images, diagrams, and PDF slides into view before sending. **Tab image included** confirms that Echo attached the visible area. Use **Snapshot** to select a smaller region or if Zen blocks access to the tab.
+
+If the tab image cannot be attached, Echo keeps your draft and asks you to enable access or retry. **Enable tab access and retry** resumes that question after approval. **Send without tab image** explicitly allows a text-only request.
 
 ## How it works
 
@@ -24,6 +26,7 @@ When you send a question, the extension reads the active tab’s accessible text
 
 ```sh
 bash scripts/build-mac.sh
+python3 scripts/package-extension.py
 node --test tests/*.test.mjs
 python3 tests/host-smoke.py
 python3 tests/zen-smoke.py --require-helper
