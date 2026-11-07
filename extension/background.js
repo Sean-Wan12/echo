@@ -11,12 +11,13 @@ let streamUpdate = null;
 let chatSession = 0;
 let contextError = "";
 let authPending = false;
+let authURL = "";
 const ready = browser.storage.local.get("model").then(saved => { model = saved.model || ""; });
 
 function snapshot(windowId) {
   const page = pages.get(windowId);
   const pageInfo = page ? { status: page.status, title: page.title } : { status: "waiting" };
-  return { messages, page: pageInfo, busy, activity, error, contextError, authPending, account, models, model,
+  return { messages, page: pageInfo, busy, activity, error, contextError, authPending, authURL, account, models, model,
     tabCaptureReady: true, contextRequired: true, version: browser.runtime.getManifest().version };
 }
 
@@ -79,6 +80,7 @@ function connectNative() {
     if (nativePort !== port) return;
     const request = pending.get(message.id);
     if (!request) return;
+    if (message.event === "authorization") { request.authorization?.(message.url); return; }
     if (message.event === "delta") { request.delta?.(message.text); return; }
     clearTimeout(request.timer);
     pending.delete(message.id);
@@ -110,6 +112,7 @@ function clearConversation() {
   error = "";
   contextError = "";
   authPending = false;
+  authURL = "";
   publish();
 }
 
@@ -129,11 +132,11 @@ function disconnectPending(reason) {
   pending.clear();
   port?.disconnect();
 }
-function native(method, params = {}, delta) {
+function native(method, params = {}, delta, authorization) {
   return new Promise((resolve, reject) => {
     const id = crypto.randomUUID();
     const timer = setTimeout(() => { pending.delete(id); reject(new Error("This request timed out. Please try again.")); }, method === "signin" ? 310000 : method === "respond" ? 290000 : 180000);
-    pending.set(id, { resolve, reject, delta, timer });
+    pending.set(id, { resolve, reject, delta, timer, authorization });
     try { connectNative().postMessage({ id, method, params }); }
     catch (e) { clearTimeout(timer); pending.delete(id); reject(e); }
   });
@@ -196,12 +199,17 @@ async function action(message) {
     if (authPending) {
       chatSession++;
       authPending = false;
+      authURL = "";
       busy = false;
       activity = "";
       error = "";
       disconnectPending("Sign-in was cancelled.");
       publish();
     }
+    return snapshot(windowId);
+  }
+  if (type === "open-signin") {
+    if (authPending && authURL) await browser.tabs.create({ windowId, url: authURL, active: true });
     return snapshot(windowId);
   }
   if (type === "sidebar-theme") {
@@ -226,9 +234,23 @@ async function action(message) {
         break;
       case "signin":
         authPending = true;
+        authURL = "";
         activity = "Finish signing in in your browser…";
         publish();
-        await native("signin");
+        await native("signin", { browserAuthorization: true }, undefined, url => {
+          if (session !== chatSession) return;
+          // Accept only the official authorization endpoint, with no embedded ID token.
+          let target;
+          try { target = new URL(url); } catch { return; }
+          if (target.origin !== "https://auth.openai.com" || target.pathname !== "/api/accounts/authorize" || target.searchParams.has("id_token_hint")) return;
+          authURL = target.href;
+          publish();
+          browser.tabs.create({ windowId, url: authURL, active: true }).catch(() => {
+            if (session !== chatSession) return;
+            activity = "Choose Open sign-in page below to continue.";
+            publish();
+          });
+        });
         await status();
         break;
       case "signout":
@@ -288,6 +310,7 @@ async function action(message) {
   } finally {
     if (session === chatSession) {
       authPending = false;
+      authURL = "";
       busy = false;
       activity = "";
       publish();
