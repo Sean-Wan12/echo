@@ -16,8 +16,12 @@ browser.runtime.onConnect.addListener(port => {
   port.onMessage.addListener(fixture => {
     messages = fixture.messages;
     busy = fixture.busy;
+    if (fixture.account) account = fixture.account;
+    if (fixture.models) models = fixture.models;
+    if (fixture.model) model = fixture.model;
     activity = fixture.busy ? "Thinking through your question…" : "";
     publish();
+    port.postMessage({applied: true});
   });
 });
 """
@@ -195,6 +199,75 @@ user_pref("layout.css.prefers-color-scheme.content-override", 1);
                     assert stream_check == {"hidesUnfinishedInline": True, "hidesUnfinishedDisplay": True,
                                             "preservesInline": True, "sameDuringStream": True,
                                             "sameOnFinish": True, "animation": "none"}, stream_check
+                    commands = driver.call("WebDriver:ExecuteAsyncScript", script="""
+                        const done = arguments[arguments.length - 1];
+                        const extension = window.wrappedJSObject?.browser ?? window.browser;
+                        extension.commands.getAll().then(done);
+                    """, args=[])["value"]
+                    toggle_command = next(command for command in commands if command["name"] == "toggle-echo")
+                    assert toggle_command["shortcut"] == "Command+Shift+U", toggle_command
+
+                    # Remove the extra sidebar document in the test tab so the real
+                    # sidebar is the only view keeping the conversation open.
+                    driver.call("WebDriver:Navigate", url="about:blank")
+
+                    def toggle_with_registered_command(expected_open):
+                        driver.call("Marionette:SetContext", value="chrome")
+                        # Headless macOS does not dispatch OS accelerators. Exercise
+                        # the XUL command attached to Echo's registered shortcut.
+                        driver.script("""
+                            const keyset = [...document.querySelectorAll('keyset')]
+                                .find(element => element.id.startsWith('ext-keyset-id-') && element.id.includes('study-lens'));
+                            const key = keyset?.querySelector('key[key="U"][modifiers="accel,shift"]');
+                            if (!key) throw Error('Echo shortcut key was not registered');
+                            key.dispatchEvent(new Event('command', {bubbles: true}));
+                        """)
+                        deadline = time.monotonic() + 4
+                        while driver.script("return window.SidebarController.currentID === arguments[0];", sidebar) != expected_open:
+                            assert time.monotonic() < deadline, "Command+Shift+U did not toggle Echo"
+                            time.sleep(.05)
+
+                    toggle_with_registered_command(False)
+                    toggle_with_registered_command(True)
+                    driver.call("Marionette:SetContext", value="content")
+                    driver.call("WebDriver:Navigate", url=page)
+                    time.sleep(.2)
+                    assert driver.script("return !document.querySelector('#messages').children.length && !document.querySelector('#welcome').hidden;"), "Closing Echo retained the old conversation"
+                    print("Echo's registered Command+Shift+U command closes and reopens a fresh conversation.")
+                    draft_check = driver.call("WebDriver:ExecuteAsyncScript", script="""
+                        const done = arguments[arguments.length - 1];
+                        const extension = window.wrappedJSObject?.browser ?? window.browser;
+                        const port = extension.runtime.connect({name: 'echo-smoke-fixture'});
+                        const draft = 'Can you see this page?';
+                        (async () => {
+                          const current = await extension.windows.getCurrent();
+                          const original = await extension.runtime.sendMessage({type: 'state', windowId: current.id});
+                          const form = document.querySelector('#composer');
+                          const failed = new MutationObserver(() => {
+                            const error = document.querySelector('#context-error');
+                            const question = document.querySelector('#question');
+                            if (error.hidden || question.disabled || question.value !== draft) return;
+                            failed.disconnect();
+                            done({ preserved: true, assistantCount: document.querySelectorAll('.message.assistant').length,
+                              recovery: !document.querySelector('#context-access').hidden });
+                            port.postMessage({messages: [], busy: false, account: original.account,
+                              models: original.models, model: original.model});
+                            port.disconnect();
+                          });
+                          failed.observe(document.body, {subtree: true, childList: true, attributes: true});
+                          await new Promise(resolve => {
+                            port.onMessage.addListener(resolve);
+                            port.postMessage({messages: [], busy: false, account: {connected: true},
+                              models: [{id: 'fixture', name: 'Fixture'}], model: 'fixture'});
+                          });
+                          form.hidden = false;
+                          document.querySelector('#plan-dialog').close();
+                          document.querySelector('#question').value = draft;
+                          form.requestSubmit();
+                        })().catch(error => done({error: error.message}));
+                    """, args=[])["value"]
+                    assert draft_check == {"preserved": True, "assistantCount": 0, "recovery": True}, draft_check
+                    print("A missing tab image preserves the draft and offers recovery without a model reply.")
                     driver.script("document.querySelector('#new-chat').click();")
                     if options.require_helper:
                         error = driver.script("return document.querySelector('#error-text').textContent;")
