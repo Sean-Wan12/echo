@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { apiInput } from "../extension/store.js";
 
 const image = "data:image/jpeg;base64,c25hcHNob3Q=";
@@ -26,13 +27,17 @@ test("send captures only the current tab and keeps manual snapshots available", 
     addListener(fn) { this.listeners.push(fn); },
     emit(...args) { return this.listeners.map(fn => fn(...args)); }
   });
-  const onMessage = event(), onClicked = event(), onConnect = event(), onActivated = event(), onUpdated = event();
+  const onMessage = event(), onClicked = event(), onCommand = event(), onConnect = event(), onActivated = event(), onUpdated = event();
   const actions = [], requests = [];
   let title = "Calculus notes", pageText = "Theorem 3.2.1. A differentiable function is continuous.";
   let url = "https://example.com/notes", imageBlocked = false, changeTabDuringCapture = false;
   let refreshDuringCapture = false;
   let blocked = false, cancelCapture = false;
   let sidebarOpen = false;
+  let sidebarPort;
+  let heldResponse = null, responseStarted = null;
+  let holdResponse = false;
+  let heldRead = null, readStarted = null;
   const nativePort = {
     onMessage: event(), onDisconnect: event(),
     postMessage({ id, method, params }) {
@@ -51,19 +56,39 @@ test("send captures only the current tab and keeps manual snapshots available", 
             break;
           case "respond":
             requests.push(structuredClone(params));
+            if (holdResponse) {
+              heldResponse = { id, port: this };
+              responseStarted();
+              break;
+            }
             ok({ text: "Here is the explanation." });
             break;
           default:
             throw new Error(`Unexpected native operation: ${method}`);
         }
       });
-    }
+    },
+    disconnect() { this.onDisconnect.emit(this); }
   };
   globalThis.browser = {
-    runtime: { onMessage, onConnect, connectNative: () => nativePort },
+    runtime: {
+      onMessage, onConnect,
+      getManifest: () => JSON.parse(readFileSync(new URL("../extension/manifest.json", import.meta.url))),
+      connectNative: () => ({ ...nativePort, onMessage: event(), onDisconnect: event() })
+    },
     storage: { local: { get: async () => ({}), set: async () => {} } },
     browserAction: { onClicked },
-    sidebarAction: { toggle: async () => { sidebarOpen = !sidebarOpen; actions.push(sidebarOpen ? "open" : "close"); } },
+    commands: { onCommand },
+    sidebarAction: {
+      toggle: async () => {
+        sidebarOpen = !sidebarOpen;
+        actions.push(sidebarOpen ? "open" : "close");
+        if (sidebarOpen) {
+          sidebarPort = { name: "sidebar:1", onDisconnect: event(), postMessage() {} };
+          onConnect.emit(sidebarPort);
+        } else sidebarPort.onDisconnect.emit();
+      }
+    },
     tabs: {
       onActivated, onUpdated,
       query: async ({ windowId }) => [{ id: windowId, title, url, width: 900, height: 830 }],
@@ -79,13 +104,16 @@ test("send captures only the current tab and keeps manual snapshots available", 
         if (imageBlocked) throw new Error("No activeTab grant");
         if (refreshDuringCapture) onUpdated.emit(1, { status: "complete" }, { active: true, windowId });
         if (changeTabDuringCapture) url = "https://example.com/other";
+        if (heldRead) {
+          readStarted();
+          await heldRead;
+        }
         return image;
       }
     },
     windows: { onRemoved: event() }
   };
   await import("../extension/background.js");
-  onConnect.emit({ name: "sidebar:1", onDisconnect: event(), postMessage() {} });
   const action = (type, extra = {}) => onMessage.emit({ type, windowId: 1, ...extra })[0];
   await onClicked.emit({ windowId: 1 })[0];
   assert.deepEqual(actions, ["open"]);
@@ -104,8 +132,9 @@ test("send captures only the current tab and keeps manual snapshots available", 
   assert.equal(chat.messages.length, 2);
   await onClicked.emit({ windowId: 1 })[0];
   assert.equal(actions.at(-1), "close");
-  assert.equal((await action("state")).messages.length, 2);
-  await onClicked.emit({ windowId: 1 })[0];
+  assert.equal((await action("state")).messages.length, 0);
+  assert.equal((await action("state")).busy, false);
+  await onCommand.emit("toggle-echo")[0];
   assert.deepEqual(actions.slice(-2), ["close", "open"]);
   const beforeSwitch = [...actions];
   url = "https://example.com/quiz";
@@ -122,23 +151,72 @@ test("send captures only the current tab and keeps manual snapshots available", 
   assert.match(scanQuestion.at(-1).text, /Q10/);
   blocked = true;
   await action("send", { text: "What animal is this?" });
-  assert.equal(requests[2].input[0].content.some(part => part.type === "input_image"), false);
+  assert.equal(requests[2].input.length, 3);
   assert.equal(requests[2].input.at(-1).content[1].image_url, image);
   assert.equal(requests[2].input.at(-1).content.at(-1).text, "What animal is this?");
   imageBlocked = true;
+  blocked = false;
+  const beforeMissingView = requests.length;
+  const beforeMessages = (await action("state")).messages.length;
   const unavailable = await action("send", { text: "What is a derivative?" });
-  assert.equal(unavailable.page.status, "unavailable");
-  assert.equal(unavailable.messages.at(-2).tabImage, false);
-  assert.equal(requests[3].input.at(-1).content.length, 1);
+  assert.equal(unavailable.page.status, "ready");
+  assert.equal(unavailable.accepted, false);
+  assert.match(unavailable.contextError, /couldn’t attach a view/);
+  assert.equal(requests.length, beforeMissingView);
+  assert.equal(unavailable.messages.length, beforeMessages);
+  const textOnly = await action("send", { text: "What is a derivative?", allowTextOnly: true });
+  assert.equal(textOnly.accepted, true);
+  assert.equal(textOnly.contextError, "");
+  assert.equal(textOnly.messages.at(-2).tabImage, false);
+  assert.equal(requests[3].input.at(-1).content.some(part => part.type === "input_image"), false);
   imageBlocked = false;
   changeTabDuringCapture = true;
   const changed = await action("send", { text: "Can you see this?" });
   assert.equal(changed.page.status, "unavailable");
-  assert.equal(requests[4].input.at(-1).content.length, 1);
+  assert.equal(changed.accepted, false);
+  assert.equal(requests.length, 4);
+  changeTabDuringCapture = false;
+  const recovered = await action("send", { text: "Can you see this?" });
+  assert.equal(recovered.accepted, true);
+  assert.equal(recovered.contextError, "");
+  assert.equal(recovered.messages.at(-2).tabImage, true);
   await action("capture");
   assert.equal(requests[5].input.at(-1).content[1].image_url, image);
   cancelCapture = true;
   await action("capture");
   assert.equal(requests.length, 6);
   assert.equal((await action("new")).messages.length, 0);
+
+  changeTabDuringCapture = false;
+  blocked = false;
+  holdResponse = true;
+  const started = new Promise(resolve => { responseStarted = resolve; });
+  const oldSend = action("send", { text: "Old question" });
+  await started;
+  await onCommand.emit("toggle-echo")[0];
+  await oldSend;
+  assert.equal((await action("state")).messages.length, 0);
+  assert.equal((await action("state")).busy, false);
+
+  holdResponse = false;
+  await onCommand.emit("toggle-echo")[0];
+  await action("send", { text: "Fresh question" });
+  assert.equal(requests.at(-1).input.length, 1);
+  assert.equal(requests.at(-1).input[0].content.at(-1).text, "Fresh question");
+  heldResponse.port.onMessage.emit({ id: heldResponse.id, event: "delta", text: "Late text" });
+  heldResponse.port.onMessage.emit({ id: heldResponse.id, ok: true, result: { text: "Old answer" } });
+  assert.equal((await action("state")).messages.at(-1).text, "Here is the explanation.");
+
+  let finishRead;
+  heldRead = new Promise(resolve => { finishRead = resolve; });
+  const reading = new Promise(resolve => { readStarted = resolve; });
+  const oldRead = action("send", { text: "Close before reading finishes" });
+  await reading;
+  const beforeClose = requests.length;
+  sidebarPort.onDisconnect.emit();
+  finishRead();
+  await oldRead;
+  assert.equal(requests.length, beforeClose);
+  assert.equal((await action("state")).messages.length, 0);
+  assert.equal((await action("state")).busy, false);
 });
