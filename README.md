@@ -4,15 +4,20 @@ Echo opens a temporary chat beside the page you’re studying in Zen on macOS. C
 
 **Snapshot** is available in the sidebar for diagrams, image-only content, and Zen’s built-in PDF viewer. Selecting a region sends the image for an explanation. **New chat** clears the current conversation. Closing Echo clears the conversation and stops its pending request. Press **⌘⇧U** to reopen it with a fresh chat.
 
-## Open Echo
+## Install Echo permanently
 
-1. Open **Zen**. Press **⌘L**, paste `about:debugging#/runtime/this-firefox` into the address bar, and press **Return**.
-2. Click **Load Temporary Add-on…**. In the file chooser, press **⌘⇧G**, paste the absolute path to this folder’s `dist/Echo.xpi`, and press **Return**. Select **Open**. Run `python3 scripts/package-extension.py` first if the package is missing or you have edited the extension.
-3. Go to a study webpage, then press **⌘⇧U** or choose **Echo** from Zen’s extensions menu.
-4. Choose **Continue with ChatGPT** to use your [ChatGPT plan](https://developers.openai.com/siwc/quickstart). Sign in with your Plus account and authorize Echo.
-5. For automatic access after switching tabs, open Echo’s **Settings → Enable tab access** and approve Zen’s website access prompt. Then ask a question in the sidebar. If you use **Snapshot**, macOS may prompt for screen recording access for Echo or Zen.
+Echo needs a Mozilla signature for a normal permanent installation in Zen. The unsigned `dist/Echo.xpi` is a submission package, not an installable signed release. A temporary add-on disappears when Zen quits, including its shortcut.
 
-If Zen reports that the Mac helper is unavailable, double-click **Echo Setup.command** in Finder to install and register `~/Applications/Echo.app` and build the extension package. This also replaces a previous `StudyLens.app` install. After editing the extension, rebuild `dist/Echo.xpi` and load that package again. Settings shows the version that is actually running. Zen unloads temporary add-ons when it quits. Repeat steps 1 and 2 after a restart.
+1. Run `python3 scripts/package-extension.py` to build the submission package.
+2. Sign in to [Mozilla Add-ons Developer Hub](https://addons.mozilla.org/developers/) and submit an extension with distribution **On your own**. This signs Echo for private installation without a public store listing. Upload `dist/Echo.xpi`; use `MOZILLA-REVIEW.md` for reviewer information. The account owner must accept Mozilla's developer agreement.
+3. Download Mozilla's signed XPI to `dist/Echo-signed.xpi`. Keep this separate from `Echo.xpi`, which the packaging script overwrites.
+4. In Zen, open `about:addons`, click the gear, choose **Install Add-on From File…**, and select the signed XPI. Confirm the requested permissions. Echo should appear in Extensions and remain installed after restarting Zen.
+5. In `about:addons`, open the gear → **Manage Extension Shortcuts** and assign **⌘⇧U** to Echo's **Open or close Echo** command. Resolve any displayed conflict with another extension. The manifest suggests this shortcut, but Zen can retain a different assignment or leave it unassigned.
+6. Open Echo and use **Continue with ChatGPT** if needed. For automatic active-tab access, use **Settings → Enable tab access** and approve Zen's website access prompt.
+
+If the Mac helper is unavailable, double-click **Echo Setup.command** to install/register `~/Applications/Echo.app`. A signed extension update does not require rebuilding the helper. Future extension changes require a higher version and a newly signed XPI installed through Add-ons Manager; editing the source folder does not update a permanent installation.
+
+For development only, open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** and select `dist/Echo.xpi`. This installation lasts only until Zen quits. Do not use it as the everyday installation.
 
 The sidebar uses Zen’s sidebar position setting. With automatic access off, open Echo from the tab with **⌘⇧U** to grant access to that tab. Scroll images, diagrams, and PDF slides into view before sending. **Tab image included** confirms that Echo attached the visible area. Use **Snapshot** to select a smaller region or if Zen blocks access to the tab.
 
