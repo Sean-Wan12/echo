@@ -25,7 +25,7 @@ The sidebar uses Zen’s sidebar position setting. With automatic access off, op
 
 If the tab image cannot be attached, Echo keeps your draft and asks you to enable access or retry. **Enable tab access and retry** resumes that question after approval. **Send without tab image** explicitly allows a text-only request.
 
-If Echo says **Finish signing in in your browser**, complete the OpenAI sign-in page in your browser. **Restart sign-in** cancels a missing or abandoned attempt and opens a fresh one. **Cancel sign-in** immediately returns to **Continue with ChatGPT**. Closing and reopening Echo also cancels a pending sign-in.
+If Echo says **Finish signing in in Zen**, complete the OpenAI sign-in page in the Zen tab Echo opens. **Open sign-in page** brings that same active sign-in back if the tab is missing. The browser handoff requires the updated Mac helper: run `Echo Setup.command` after updating from 0.5.1 or earlier. **Restart sign-in** cancels a missing or abandoned attempt and opens a fresh one. **Cancel sign-in** immediately returns to **Continue with ChatGPT**. Closing and reopening Echo also cancels a pending sign-in.
 
 ## How it works
 
