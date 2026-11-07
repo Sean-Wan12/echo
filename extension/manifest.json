@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Echo",
-  "version": "0.4.4",
+  "version": "0.4.6",
   "description": "Ask questions about the current page in a temporary study chat.",
   "browser_specific_settings": { "gecko": { "id": "study-lens@local", "strict_min_version": "126.0" } },
   "permissions": ["activeTab", "nativeMessaging", "storage"],
@@ -9,7 +9,7 @@
   "background": { "page": "background.html", "persistent": true },
   "browser_action": { "default_title": "Toggle Echo", "default_icon": "icons/apple-cutout.png" },
   "sidebar_action": { "default_title": "Echo", "default_panel": "sidebar.html", "default_icon": "icons/apple-cutout.png", "open_at_install": false },
-  "commands": { "_execute_browser_action": { "suggested_key": { "mac": "Command+Shift+U" }, "description": "Toggle the Echo sidebar" } },
+  "commands": { "toggle-echo": { "suggested_key": { "mac": "Command+Shift+U" }, "description": "Open or close Echo" } },
   "icons": { "128": "icons/apple-cutout.png" },
   "content_security_policy": "script-src 'self'; object-src 'none'; base-uri 'none';"
 }
