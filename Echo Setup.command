@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
+python3 "$root/scripts/package-extension.py"
 archive="$root/dist/Echo-mac.zip"
 for source in "$root/scripts/build-mac.sh" "$root/extension/icons/apple-cutout.png" "$root"/native/*; do
   if [[ ! -f "$archive" || "$source" -nt "$archive" ]]; then
@@ -50,4 +51,4 @@ function run(args) {
 JXA
 registered=1
 if is_echo "$legacy"; then mv "$legacy" "$scratch/previous-StudyLens.app"; fi
-printf '\nEcho installed at %s. In Zen, open about:debugging#/runtime/this-firefox.\nIf Echo is loaded from this folder, click Reload. Otherwise, choose Load Temporary Add-on and select:\n\n%s\n\nOpen Echo with Command+Shift+U.\n' "$app" "$root/extension/manifest.json"
+printf '\nEcho installed at %s. In Zen, open about:debugging#/runtime/this-firefox,\nchoose Load Temporary Add-on, and select the newly built package:\n\n%s\n\nOpen Echo with Command+Shift+U.\n' "$app" "$root/dist/Echo.xpi"
