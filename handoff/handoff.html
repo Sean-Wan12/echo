@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Echo Handoff</title>
+  <style>
+    :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+    body { max-width: 760px; margin: 40px auto; padding: 0 20px 60px; }
+    h1 { margin-bottom: 4px; }
+    p { margin-top: 0; }
+    label { display: block; font-weight: 600; margin: 22px 0 7px; }
+    textarea { box-sizing: border-box; display: block; width: 100%; padding: 12px; border: 1px solid #888; border-radius: 8px; font: inherit; resize: vertical; }
+    #question { min-height: 100px; }
+    #context { min-height: 180px; font-size: 14px; }
+    #source { overflow-wrap: anywhere; font-size: 14px; opacity: .8; }
+    #preview { display: block; max-width: 100%; max-height: 320px; margin: 12px 0; border: 1px solid #888; border-radius: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0; }
+    button { padding: 10px 15px; border: 1px solid #777; border-radius: 8px; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .45; cursor: default; }
+    .primary { background: #1c6bba; color: white; border-color: #1c6bba; }
+    #status { min-height: 1.5em; font-weight: 600; }
+    .note { font-size: 14px; opacity: .8; }
+  </style>
+</head>
+<body>
+  <h1>Echo Handoff</h1>
+  <p>Prepare the question here, then paste it into ChatGPT. Send it yourself when ready.</p>
+  <div id="source"></div>
+  <label for="question">Your question</label>
+  <textarea id="question" placeholder="What would you like explained?"></textarea>
+  <label for="context">Page text (editable)</label>
+  <textarea id="context" placeholder="Page text will appear here if Zen can read it."></textarea>
+  <p id="context-note" class="note"></p>
+  <div class="actions">
+    <button id="copy-prompt" class="primary">Copy question &amp; open ChatGPT</button>
+    <button id="copy-image">Copy screenshot &amp; switch to ChatGPT</button>
+  </div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <section id="image-section" hidden>
+    <strong>Captured visible tab</strong>
+    <img id="preview" alt="Screenshot of the page at the time you opened the handoff">
+  </section>
+  <div id="notes" class="note"></div>
+  <p class="note">Paste the question first. For a diagram or PDF, return here, copy the screenshot, paste it into the same ChatGPT message, then send. ChatGPT Free limits still apply.</p>
+  <script src="handoff.js"></script>
+</body>
+</html>
