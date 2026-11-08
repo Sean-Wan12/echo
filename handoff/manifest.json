@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "Echo Handoff",
+  "version": "0.1.0",
+  "description": "Prepare the current page and a question for a manual ChatGPT handoff.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "echo-handoff@local",
+      "strict_min_version": "140.0"
+    }
+  },
+  "permissions": ["activeTab", "clipboardWrite"],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_title": "Prepare ChatGPT handoff"
+  },
+  "content_security_policy": "script-src 'self'; object-src 'none'; base-uri 'none';"
+}
